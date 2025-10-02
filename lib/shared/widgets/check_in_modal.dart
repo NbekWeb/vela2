@@ -23,16 +23,20 @@ class _CheckInModalState extends State<CheckInModal> {
 
   String _getMoodText(double value) {
     if (value <= 0.20) {
-      return 'Struggling';
-    } else if (value <= 0.80) {
+      return 'Bad';
+    } else if (value <= 0.40) {
+      return 'Not Great';
+    } else if (value <= 0.60) {
       return 'Neutral';
+    } else if (value <= 0.80) {
+      return 'Good';
     } else {
       return 'Excellent';
     }
   }
 
   String _getCheckInChoice(double value) {
-    if (value <= 0.20) {
+    if (value <= 0.40) {
       return 'struggling';
     } else if (value <= 0.80) {
       return 'neutral';
@@ -43,11 +47,15 @@ class _CheckInModalState extends State<CheckInModal> {
 
   String _getMoodImage(double value) {
     if (value <= 0.20) {
-      return 'assets/img/struggling.png';
+      return 'assets/img/struggling.png'; // Bad
+    } else if (value <= 0.40) {
+      return 'assets/img/notgreat.png'; // Not Great
+    } else if (value <= 0.60) {
+      return 'assets/img/planet.png'; // Neutral
     } else if (value <= 0.80) {
-      return 'assets/img/planet.png';
+      return 'assets/img/good.png'; // Good
     } else {
-      return 'assets/img/excellent.png';
+      return 'assets/img/excellent.png'; // Excellent
     }
   }
 
@@ -249,7 +257,15 @@ class _CheckInModalState extends State<CheckInModal> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: const [
                         Text(
-                          'Struggling',
+                          'Bad',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Satoshi',
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          'Not Great',
                           style: TextStyle(
                             color: Colors.white,
                             fontFamily: 'Satoshi',
@@ -258,6 +274,14 @@ class _CheckInModalState extends State<CheckInModal> {
                         ),
                         Text(
                           'Neutral',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Satoshi',
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          'Good',
                           style: TextStyle(
                             color: Colors.white,
                             fontFamily: 'Satoshi',

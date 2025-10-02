@@ -215,7 +215,7 @@ class RitualChooser extends StatelessWidget {
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 60),
+          const SizedBox(height: 40),
           ...rituals.map(
             (ritual) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -226,6 +226,7 @@ class RitualChooser extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 40),
         ],
       ),
     );

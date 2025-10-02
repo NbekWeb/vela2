@@ -125,6 +125,8 @@ flutter:
     - assets/img/calming.png
     - assets/img/dream.png
     - assets/img/struggling.png
+    - assets/img/good.png
+    - assets/img/notgreat.png
     - assets/img/excellent.png
     - assets/img/planet.png
     - assets/img/

@@ -101,7 +101,7 @@ class _SleepMeditationAudioPlayerState
 
     return Column(
       children: [
-        const SizedBox(height: 16),
+        SizedBox(height: MediaQuery.of(context).size.height * 0.10),
         Text(
           title,
           style: TextStyle(

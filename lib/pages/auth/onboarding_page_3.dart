@@ -111,8 +111,6 @@ class _OnboardingPage3State extends State<OnboardingPage3> {
                         ),
                 ),
 
-                const SizedBox(height: 8),
-
                 const SizedBox(height: 20),
                 Center(
                   child: GestureDetector(

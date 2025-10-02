@@ -342,6 +342,9 @@ class _RegisterPageState extends State<RegisterPage> {
                                     Expanded(
                                       child: SingleChildScrollView(
                                         physics: const BouncingScrollPhysics(),
+                                        keyboardDismissBehavior:
+                                            ScrollViewKeyboardDismissBehavior
+                                                .onDrag,
                                         padding: EdgeInsets.only(
                                           bottom: isKeyboardVisible ? 20 : 0,
                                         ),
@@ -411,7 +414,13 @@ class _RegisterPageState extends State<RegisterPage> {
                                                       ),
                                                     ],
                                                   ),
-                                                  SizedBox(height: 60.sp),
+                                                  SizedBox(
+                                                    height:
+                                                        MediaQuery.of(
+                                                          context,
+                                                        ).size.height *
+                                                        0.125,
+                                                  ),
                                                   Center(
                                                     child: Text(
                                                       'Create an account',

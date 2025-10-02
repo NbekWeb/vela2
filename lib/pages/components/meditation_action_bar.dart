@@ -49,10 +49,7 @@ class MeditationActionBar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(30),
               ),
               child: IconButton(
-                icon: const Icon(
-                  Icons.delete_outline,
-                  color: Colors.white,
-                ),
+                icon: const Icon(Icons.delete_outline, color: Colors.white),
                 onPressed: onDelete,
               ),
             ),
@@ -121,10 +118,7 @@ class MeditationActionBar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(30),
               ),
               child: IconButton(
-                icon: const Icon(
-                  Icons.edit_outlined,
-                  color: Colors.white,
-                ),
+                icon: const Icon(Icons.edit_outlined, color: Colors.white),
                 onPressed: onEdit,
               ),
             ),
@@ -138,4 +132,4 @@ class MeditationActionBar extends StatelessWidget {
       ),
     );
   }
-} 
+}

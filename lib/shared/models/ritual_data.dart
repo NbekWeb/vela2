@@ -155,7 +155,7 @@ class RitualDataProvider {
       defaultSettings: {
         'ritualType': ['guided'],
         'tone': ['dreamy'],
-        'voice': ['male'],
+        'voice': ['female'],
         'duration': ['2'],
       },
     ),

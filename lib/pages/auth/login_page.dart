@@ -313,6 +313,9 @@ class _LoginPageState extends State<LoginPage> {
                                 Expanded(
                                   child: SingleChildScrollView(
                                     physics: const BouncingScrollPhysics(),
+                                    keyboardDismissBehavior:
+                                        ScrollViewKeyboardDismissBehavior
+                                            .onDrag, // <— вот эта строка
                                     padding: EdgeInsets.only(
                                       bottom: isKeyboardVisible ? 20 : 0,
                                     ),
@@ -385,7 +388,7 @@ class _LoginPageState extends State<LoginPage> {
                                                     MediaQuery.of(
                                                       context,
                                                     ).size.height *
-                                                    0.10,
+                                                    0.15,
                                               ),
                                               Center(
                                                 child: Text(

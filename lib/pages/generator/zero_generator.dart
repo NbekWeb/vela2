@@ -88,7 +88,8 @@ class _ZeroGeneratorState extends State<ZeroGenerator> {
                     style: TextStyle(
                       fontFamily: 'Satoshi',
                       fontWeight: FontWeight.w600,
-                      fontSize: 16.sp,
+                      fontSize: 14.sp,
+                      letterSpacing: -0.1,
                       height: 1.5,
                       color: Color(0xFFF2EFEA),
                     ),
@@ -103,7 +104,8 @@ class _ZeroGeneratorState extends State<ZeroGenerator> {
                     style: TextStyle(
                       fontFamily: 'Satoshi',
                       fontWeight: FontWeight.w600,
-                      fontSize: 16.sp,
+                      fontSize: 14.sp,
+                      letterSpacing: -0.1,
                       height: 1.5,
                       color: Color(0xFFF2EFEA),
                     ),
@@ -173,11 +175,13 @@ class _ZeroGeneratorState extends State<ZeroGenerator> {
               height: 60,
               width: double.infinity,
               child: ElevatedButton(
-                 onPressed: () {
-                   _handleLogout(context);
-                 },
+                onPressed: () {
+                  _handleLogout(context);
+                },
                 style: ButtonStyle(
-                  backgroundColor: WidgetStateProperty.all(const Color.fromRGBO(59, 110, 170, .2)),
+                  backgroundColor: WidgetStateProperty.all(
+                    const Color.fromRGBO(59, 110, 170, .2),
+                  ),
                   foregroundColor: WidgetStateProperty.all(Colors.white),
                   shape: WidgetStateProperty.all(
                     RoundedRectangleBorder(

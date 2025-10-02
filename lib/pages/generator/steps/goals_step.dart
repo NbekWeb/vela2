@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:provider/provider.dart';
+
 import '../../../shared/models/meditation_profile_data.dart';
 import '../../../core/stores/meditation_store.dart';
 import '../step_scaffold.dart';
-import 'package:provider/provider.dart';
 
 class GoalsStep extends StatefulWidget {
   final MeditationProfileData profileData;
@@ -14,6 +16,7 @@ class GoalsStep extends StatefulWidget {
   final int totalSteps;
   final int stepperIndex;
   final int stepperCount;
+
   const GoalsStep({
     required this.profileData,
     required this.onProfileDataChanged,
@@ -32,12 +35,15 @@ class GoalsStep extends StatefulWidget {
 
 class _GoalsStepState extends State<GoalsStep> {
   final TextEditingController _controller = TextEditingController();
+  final ScrollController _textScroll = ScrollController();
+  final FocusNode _textFocus = FocusNode();
+
+  // Чтобы знать границы поля и отличать жесты внутри/снаружи
+  final GlobalKey _textFieldKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
-    
-    // Avvalgi qiymatni ko'rsatish uchun
     if (widget.profileData.goals != null &&
         widget.profileData.goals!.isNotEmpty) {
       _controller.text = widget.profileData.goals!.join(', ');
@@ -47,117 +53,168 @@ class _GoalsStepState extends State<GoalsStep> {
   @override
   void dispose() {
     _controller.dispose();
+    _textScroll.dispose();
+    _textFocus.dispose();
     super.dispose();
   }
 
+  void _dismissKeyboard() => FocusScope.of(context).unfocus();
+
+  bool _isPointInsideTextField(Offset globalPos) {
+    final ctx = _textFieldKey.currentContext;
+    if (ctx == null) return false;
+    final rb = ctx.findRenderObject() as RenderBox?;
+    if (rb == null || !rb.attached) return false;
+    final topLeft = rb.localToGlobal(Offset.zero);
+    final rect = topLeft & rb.size;
+    return rect.contains(globalPos);
+  }
+
   void _onGoalsChanged(String value) {
-    // Maqsadlarni vergul orqali massivga aylantiramiz
     final goals = value
         .split(',')
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
 
-    // Update local profile data
     final updatedProfile = widget.profileData.copyWith(goals: goals);
     widget.onProfileDataChanged(updatedProfile);
-
-    // Save to store
-    final meditationStore = Provider.of<MeditationStore>(
+    Provider.of<MeditationStore>(
       context,
       listen: false,
-    );
-    meditationStore.setMeditationProfile(updatedProfile);
-
-    setState(() {}); // UI yangilash uchun
+    ).setMeditationProfile(updatedProfile);
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     return KeyboardVisibilityBuilder(
+      controller: KeyboardVisibilityController(),
       builder: (context, isKeyboardVisible) {
-        return ScrollConfiguration(
-          behavior: ScrollConfiguration.of(
-            context,
-          ).copyWith(physics: const NeverScrollableScrollPhysics()),
-          child: GestureDetector(
-            onTap: () => FocusScope.of(context).unfocus(),
-            behavior: HitTestBehavior.opaque,
-            child: StepScaffold(
-              title: '',
-              onBack: widget.onBack,
-              onNext: widget.onNext,
-              currentStep: widget.currentStep,
-              totalSteps: widget.totalSteps,
-              nextEnabled: _controller.text.trim().isNotEmpty,
-              stepperIndex: widget.stepperIndex,
-              stepperCount: widget.stepperCount,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const Text(
-                    'Specific goals',
-                    style: TextStyle(
-                      fontFamily: 'Canela',
-                      fontWeight: FontWeight.w300,
-                      fontSize: 36,
-                      color: Color(0xFFF2EFEA),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Are there specific goals you want to accomplish, experiences you want to have, or habits you want to form or change?',
-                    style: TextStyle(
-                      fontFamily: 'Satoshi',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      decoration: TextDecoration.none,
-                      color: Color(0xFFF2EFEA),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextField(
-                      controller: _controller,
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          // Скрыть клавиатуру на вертикальном свайпе ВНЕ поля (вверх/вниз)
+          onVerticalDragUpdate: (details) {
+            if (!_isPointInsideTextField(details.globalPosition)) {
+              _dismissKeyboard();
+            }
+          },
+          // Скрыть клавиатуру при тапе ВНЕ поля
+          onTapDown: (details) {
+            if (!_isPointInsideTextField(details.globalPosition)) {
+              _dismissKeyboard();
+            }
+          },
+          child: StepScaffold(
+            title: '',
+            onBack: widget.onBack,
+            onNext: widget.onNext,
+            currentStep: widget.currentStep,
+            totalSteps: widget.totalSteps,
+            nextEnabled: _controller.text.trim().isNotEmpty,
+            stepperIndex: widget.stepperIndex,
+            stepperCount: widget.stepperCount,
+            showTitles: true,
+            // Без onDrag-автоскрытия, чтобы не ловить драги внутри TextField
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Specific goals',
+                      style: TextStyle(
+                        fontFamily: 'Canela',
+                        fontWeight: FontWeight.w300,
+                        fontSize: 32.sp,
+                        letterSpacing: -0.5,
+                        color: Color(0xFFF2EFEA),
+                      ),
                       textAlign: TextAlign.center,
-                      minLines: 3,
-                      maxLines: isKeyboardVisible ? 4 : 6,
-                      scrollPhysics: const ClampingScrollPhysics(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Satoshi',
-                        fontSize: 15,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Start a morning routine, feel less anxious, travel more.',
-                        hintStyle: const TextStyle(color: Color(0xFFeeeeee)),
-                        filled: true,
-                        fillColor: Color(0xFF5882B6),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: Color(0x152B561A),
-                            width: 1,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF152B56),
-                            width: 1,
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.all(16),
-                      ),
-                      onChanged: _onGoalsChanged,
                     ),
-                  ),
-                  const SizedBox(height: 30),
-                ],
+                    const SizedBox(height: 0),
+                    const Text(
+                      'Are there specific goals you want to accomplish, experiences you want to have, or habits you want to form or change?',
+                      style: TextStyle(
+                        fontFamily: 'Satoshi',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        decoration: TextDecoration.none,
+                        color: Color(0xFFF2EFEA),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 30),
+
+                    // Поле ввода: свайпы/тапы внутри НЕ закрывают клавиатуру
+                    SizedBox(
+                      key: _textFieldKey, // важно: ключ на контейнер с полем
+                      width: double.infinity,
+                      height: isKeyboardVisible ? 120 : 160,
+                      child: ScrollbarTheme(
+                        data: ScrollbarThemeData(
+                          thickness: const MaterialStatePropertyAll(0),
+                          radius: const Radius.circular(8),
+                          thumbColor: MaterialStatePropertyAll(
+                            Colors.white.withOpacity(0),
+                          ),
+                          trackColor: const MaterialStatePropertyAll(
+                            Colors.transparent,
+                          ),
+                          trackVisibility: const MaterialStatePropertyAll(true),
+                        ),
+                        child: Scrollbar(
+                          controller: _textScroll,
+                          thumbVisibility: true,
+                          child: TextField(
+                            focusNode: _textFocus,
+                            controller: _controller,
+                            scrollController: _textScroll,
+                            textAlign: TextAlign.center,
+                            expands: true,
+                            minLines: null,
+                            maxLines: null,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'Satoshi',
+                              fontSize: 14.sp,
+                              decoration: TextDecoration.none,
+                            ),
+                            decoration: InputDecoration(
+                              hintText:
+                                  'Start a morning routine, feel less anxious, travel more.',
+                              hintStyle: const TextStyle(
+                                color: Color(0xFFFFFFFF),
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFF5882B6),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                  color: Color(0x152B561A),
+                                  width: 1,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF152B56),
+                                  width: 1,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.all(16),
+                            ),
+                            onChanged: _onGoalsChanged,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(height: isKeyboardVisible ? 10 : 30),
+                  ],
+                ),
               ),
             ),
           ),

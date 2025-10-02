@@ -102,16 +102,20 @@ class _CheckInFormState extends State<_CheckInForm> {
 
   String _getMoodText(double value) {
     if (value <= 0.20) {
-      return 'Struggling';
-    } else if (value <= 0.80) {
+      return 'Bad';
+    } else if (value <= 0.40) {
+      return 'Not Great';
+    } else if (value <= 0.60) {
       return 'Neutral';
+    } else if (value <= 0.80) {
+      return 'Good';
     } else {
       return 'Excellent';
     }
   }
 
   String _getCheckInChoice(double value) {
-    if (value <= 0.20) {
+    if (value <= 0.40) {
       return 'struggling';
     } else if (value <= 0.80) {
       return 'neutral';
@@ -121,12 +125,16 @@ class _CheckInFormState extends State<_CheckInForm> {
   }
 
   String _getMoodImage(double value) {
-    if (value <= 0.2) {
-      return 'assets/img/struggling.png'; // Struggling mood image
-    } else if (value <= 0.8) {
-      return 'assets/img/planet.png'; // Neutral mood image
+    if (value <= 0.20) {
+      return 'assets/img/struggling.png'; // Bad
+    } else if (value <= 0.40) {
+      return 'assets/img/notgreat.png'; // Not Great
+    } else if (value <= 0.60) {
+      return 'assets/img/planet.png'; // Neutral
+    } else if (value <= 0.80) {
+      return 'assets/img/good.png'; // Good
     } else {
-      return 'assets/img/excellent.png'; // Excellent mood image
+      return 'assets/img/excellent.png'; // Excellent
     }
   }
 
@@ -220,34 +228,44 @@ class _CheckInFormState extends State<_CheckInForm> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: const [
-                        Expanded(
-                          child: Text(
-                            'Struggling',
-                            style: TextStyle(
-                              color: Color(0xFFF2EFEA),
-                              fontFamily: 'Satoshi',
-                            ),
-                            textAlign: TextAlign.left,
+                        Text(
+                          'Bad',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Satoshi',
+                            fontSize: 12,
                           ),
                         ),
-                        Expanded(
-                          child: Text(
-                            'Neutral',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontFamily: 'Satoshi',
-                            ),
-                            textAlign: TextAlign.center,
+                        Text(
+                          'Not Great',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Satoshi',
+                            fontSize: 12,
                           ),
                         ),
-                        Expanded(
-                          child: Text(
-                            'Excellent',
-                            style: TextStyle(
-                              color: Color(0xFFF2EFEA),
-                              fontFamily: 'Satoshi',
-                            ),
-                            textAlign: TextAlign.right,
+                        Text(
+                          'Neutral',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Satoshi',
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          'Good',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Satoshi',
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          'Excellent',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Satoshi',
+                            fontSize: 12,
                           ),
                         ),
                       ],
@@ -363,16 +381,16 @@ class _CheckInButtonsState extends State<_CheckInButtons> {
     final checkInChoice = _getCheckInChoice(widget.sliderValue);
     final description = widget.descriptionController.text.trim();
 
-    if (description.isEmpty) {
-      Fluttertoast.showToast(
-        msg: 'Please enter a description',
-        toastLength: Toast.LENGTH_LONG,
-        gravity: ToastGravity.TOP,
-        backgroundColor: const Color(0xFFF2EFEA),
-        textColor: const Color(0xFF3B6EAA),
-      );
-      return;
-    }
+    // if (description.isEmpty) {
+    //   Fluttertoast.showToast(
+    //     msg: 'Please enter a description',
+    //     toastLength: Toast.LENGTH_LONG,
+    //     gravity: ToastGravity.TOP,
+    //     backgroundColor: const Color(0xFFF2EFEA),
+    //     textColor: const Color(0xFF3B6EAA),
+    //   );
+    //   return;
+    // }
 
     checkInStore.submitCheckIn(
       checkInChoice: checkInChoice,
