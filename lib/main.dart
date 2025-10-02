@@ -8,6 +8,7 @@ import 'core/stores/auth_store.dart';
 import 'core/stores/meditation_store.dart';
 import 'core/stores/like_store.dart';
 import 'core/stores/check_in_store.dart';
+import 'core/services/app_lifecycle_service.dart';
 import 'pages/loading_screen.dart';
 import 'pages/auth/login_page.dart';
 import 'pages/auth/register_page.dart';
@@ -68,6 +69,10 @@ void main() async {
   final likeStore = LikeStore();
   final checkInStore = CheckInStore();
 
+  // Initialize app lifecycle service for uninstall detection
+  final appLifecycleService = AppLifecycleService();
+  await appLifecycleService.initialize();
+
   await authStore.initialize();
   await meditationStore.initialize();
 
@@ -88,6 +93,7 @@ void main() async {
       meditationStore: meditationStore,
       likeStore: likeStore,
       checkInStore: checkInStore,
+      appLifecycleService: appLifecycleService,
       initialRoute: initialRoute,
     ),
   );
@@ -98,6 +104,7 @@ class MyApp extends StatelessWidget {
   final MeditationStore meditationStore;
   final LikeStore likeStore;
   final CheckInStore checkInStore;
+  final AppLifecycleService appLifecycleService;
   final String initialRoute;
 
   const MyApp({
@@ -106,6 +113,7 @@ class MyApp extends StatelessWidget {
     required this.meditationStore,
     required this.likeStore,
     required this.checkInStore,
+    required this.appLifecycleService,
     required this.initialRoute,
   });
 

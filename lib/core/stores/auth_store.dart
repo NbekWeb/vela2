@@ -748,6 +748,37 @@ class AuthStore extends ChangeNotifier {
     }
   }
 
+  // Clear all tokens and data (for app uninstall detection)
+  Future<void> clearAllData() async {
+    try {
+      // Clear all secure storage data
+      await _secureStorage.deleteAll();
+      
+      // Clear social auth sessions
+      if (!kIsWeb) {
+        await _googleSignIn.signOut();
+        await FacebookAuth.instance.logOut();
+        await FirebaseAuth.instance.signOut();
+      }
+
+      // Clear memory tokens
+      _user = null;
+      _accessToken = null;
+      _refreshToken = null;
+      _error = null;
+      _lastIdToken = null;
+
+      // Clear API service memory token
+      ApiService.setMemoryToken(null);
+
+      notifyListeners();
+      
+      developer.log('✅ All user data cleared successfully');
+    } catch (e) {
+      developer.log('❌ Error clearing all data: $e');
+    }
+  }
+
   // Clear error
   void clearError() {
     _error = null;

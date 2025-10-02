@@ -12,6 +12,7 @@ import 'package:vela/core/stores/auth_store.dart';
 import 'package:vela/core/stores/meditation_store.dart';
 import 'package:vela/core/stores/like_store.dart';
 import 'package:vela/core/stores/check_in_store.dart';
+import 'package:vela/core/services/app_lifecycle_service.dart';
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
@@ -20,11 +21,13 @@ void main() {
     final meditationStore = MeditationStore();
     final likeStore = LikeStore();
     final checkInStore = CheckInStore();
+    final appLifecycleService = AppLifecycleService();
     await tester.pumpWidget(MyApp(
       authStore: authStore, 
       meditationStore: meditationStore,
       likeStore: likeStore,
       checkInStore: checkInStore,
+      appLifecycleService: appLifecycleService,
       initialRoute: '/loading',
     ));
 

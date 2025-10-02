@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart' show globalMeditationId, shouldNavigateToProfile;
+import '../../core/services/app_lifecycle_service.dart';
 import 'home.dart';
 import 'vault.dart';
 import 'check_in.dart';
@@ -131,6 +132,9 @@ class DashboardMainPageState extends State<DashboardMainPage> {
       // Load saved selected index only if not navigating to profile
       _loadSelectedIndex();
     }
+    
+    // Update last active time for uninstall detection
+    AppLifecycleService().updateLastActiveTime();
 
     // Check if there's a global meditation ID to play
     WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../shared/widgets/stars_animation.dart';
 import '../../core/stores/auth_store.dart';
+import '../../core/services/token_cleanup_test.dart';
 import 'main.dart';
 import 'subscription_billing_page.dart';
 import 'privacy_security_page.dart';
@@ -154,6 +155,7 @@ class SettingsPage extends StatelessWidget {
         'onTap': () => _navigateToHelpSupport(context),
       },
       {'title': 'About Vela', 'onTap': () => _navigateToAboutVela(context)},
+      {'title': 'Test Token Cleanup', 'onTap': () => _testTokenCleanup(context)},
       {'title': 'Log out', 'onTap': () => _handleLogout(context)},
     ];
 
@@ -258,6 +260,38 @@ class SettingsPage extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const AboutVelaPage()),
+    );
+  }
+
+  void _testTokenCleanup(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Test Token Cleanup'),
+          content: const Text('This will test the token cleanup functionality. Continue?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await TokenCleanupTest.runAllTests();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Token cleanup test completed. Check console for results.'),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Run Test'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
