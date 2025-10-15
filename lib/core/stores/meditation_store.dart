@@ -287,34 +287,32 @@ class MeditationStore extends ChangeNotifier {
         "duration": duration.isNotEmpty ? duration : '2',
       };
 
-      // Server hali ham barcha fieldlarni talab qilmoqda, shuning uchun default qiymatlar qo'shamiz
-      data["gender"] = (gender != null && gender.isNotEmpty)
-          ? gender.toLowerCase()
-          : "male";
-      data["dream"] = (dream != null && dream.isNotEmpty)
-          ? dream
-          : "general_wellbeing";
-      data["goals"] = (goals != null && goals.isNotEmpty)
-          ? goals
-          : "personal_growth";
-      data["age_range"] = (ageRange != null && ageRange.isNotEmpty)
-          ? ageRange.split('-').last.trim()
-          : "25";
-      data["happiness"] = (happiness != null && happiness.isNotEmpty)
-          ? happiness
-          : "moderate";
+      // Only add fields if they have values, don't send default values
+      if (gender != null && gender.isNotEmpty) {
+        data["gender"] = gender.toLowerCase();
+      }
+      if (dream != null && dream.isNotEmpty) {
+        data["dream"] = dream;
+      }
+      if (goals != null && goals.isNotEmpty) {
+        data["goals"] = goals;
+      }
+      if (ageRange != null && ageRange.isNotEmpty) {
+        data["age_range"] = ageRange.split('-').last.trim();
+      }
+      if (happiness != null && happiness.isNotEmpty) {
+        data["happiness"] = happiness;
+      }
           
-      // Debug: Print the actual values being sent to API
-      print('🔍 Debug - API data being sent:');
-      print('  dream: "$dream"');
-      print('  goals: "$goals"');
-      print('  happiness: "$happiness"');
+    
 
       final response = await ApiService.request(
         url: 'auth/meditation/external/',
         method: 'POST',
         data: data,
       );
+      print('🔍 Debug - API data being sent:');
+      print('  data: $data');
       
 
       // Handle external meditation response
