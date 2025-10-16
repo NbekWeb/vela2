@@ -72,9 +72,18 @@ class _GeneratorPageState extends State<GeneratorPage> {
     print('  dream: ${profileData.dream}');
     print('  goals: ${profileData.goals}');
     print('  happiness: ${profileData.happiness}');
+    print('  voice: ${profileData.voice}');
     print('  dream joined: ${_getJoinedValue(profileData.dream)}');
     print('  goals joined: ${_getJoinedValue(profileData.goals)}');
     print('  happiness joined: ${_getJoinedValue(profileData.happiness)}');
+    print('  voice first: ${_getFirstValue(profileData.voice)}');
+    print('  voice list length: ${profileData.voice?.length}');
+    print('  voice list content: ${profileData.voice}');
+    print('  voice being passed to API: ${_getFirstValue(profileData.voice)}');
+    print('  stored voice from meditation store: ${meditationStore.storedVoice}');
+    
+    // Always use stored voice since profile data voice is not being updated properly
+    final voiceToUse = meditationStore.storedVoice ?? 'male';
     
     await meditationStore.postCombinedProfile(
       gender: profileData.gender?.toLowerCase() ?? '',
@@ -86,7 +95,7 @@ class _GeneratorPageState extends State<GeneratorPage> {
       description: profileData.description,
       ritualType: _getFirstValue(profileData.ritualType),
       tone: _getFirstValue(profileData.tone),
-      voice: _getFirstValue(profileData.voice),
+      voice: voiceToUse,
       duration: _getFirstValue(profileData.duration),
       isDirectRitual: false,
       onError: () {

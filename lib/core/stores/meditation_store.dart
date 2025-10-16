@@ -16,6 +16,7 @@ class MeditationStore extends ChangeNotifier {
   String? _storedDuration;
   int? _storedPlanType;
   String? _storedRitualId;
+  String? _storedVoice;
 
   // Generated data storage
   Map<String, dynamic>? _generatedData;
@@ -46,6 +47,7 @@ class MeditationStore extends ChangeNotifier {
   String? get storedDuration => _storedDuration;
   int? get storedPlanType => _storedPlanType;
   String? get storedRitualId => _storedRitualId;
+  String? get storedVoice => _storedVoice;
 
   // Generated data getter
   Map<String, dynamic>? get generatedData => _generatedData;
@@ -113,12 +115,16 @@ class MeditationStore extends ChangeNotifier {
     required int planType,
     String? fileUrl,
     String? ritualId,
+    String? voice,
   }) async {
     try {
       await _secureStorage.write(key: 'ritual_type', value: ritualType);
       await _secureStorage.write(key: 'tone', value: tone);
       await _secureStorage.write(key: 'duration', value: duration);
       await _secureStorage.write(key: 'plan_type', value: planType.toString());
+      if (voice != null) {
+        await _secureStorage.write(key: 'voice', value: voice);
+      }
       if (fileUrl != null) {
         await _secureStorage.write(key: 'file', value: fileUrl);
       }
@@ -150,6 +156,8 @@ class MeditationStore extends ChangeNotifier {
       _storedPlanType = planTypeStr != null ? int.tryParse(planTypeStr) : null;
       _storedRitualId = await _secureStorage.read(key: 'ritual_id');
       _fileUrl = await _secureStorage.read(key: 'file');
+      _storedVoice = await _secureStorage.read(key: 'voice');
+      print('🔍 Debug - Voice loaded from storage: "$_storedVoice"');
 
       notifyListeners();
     } catch (e) {
@@ -275,15 +283,20 @@ class MeditationStore extends ChangeNotifier {
     bool isDirectRitual = false,
     VoidCallback? onError, // Callback for error handling
   }) async {
+    print('🔍 Debug - Voice received in postCombinedProfile: "$voice"');
+    print('🔍 Debug - Stored voice: "$_storedVoice"');
     setLoading(true);
     setError(null);
     try {
+      final finalVoice = _storedVoice?.isNotEmpty == true ? _storedVoice! : (voice.isNotEmpty ? voice : 'male');
+      print('🔍 Debug - Final voice being sent to API: "$finalVoice"');
+      
       final data = <String, dynamic>{
         "plan_type": planType ?? 1,
         "description": description,
         "ritual_type": ritualType,
         "tone": tone,
-        "voice": voice.isNotEmpty ? voice : 'male',
+        "voice": finalVoice,
         "duration": duration.isNotEmpty ? duration : '2',
       };
 
@@ -313,6 +326,7 @@ class MeditationStore extends ChangeNotifier {
       );
       print('🔍 Debug - API data being sent:');
       print('  data: $data');
+      print('  voice parameter: "$voice"');
       
 
       // Handle external meditation response
@@ -345,11 +359,11 @@ class MeditationStore extends ChangeNotifier {
           'id': responseData['meditation_id'],
           'file': fileUrl,
           'plan_type':
-              1, // Use default plan type since external API returns string
+              1, 
           'description': responseData['message'],
           'ritual_type': [mappedRitualType],
           'tone': [tone],
-          'voice': [voice.isNotEmpty ? voice : 'male'],
+          'voice': [finalVoice], 
           'duration': [duration.isNotEmpty ? duration : '2'],
         };
 

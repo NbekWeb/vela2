@@ -155,7 +155,7 @@ class RitualDataProvider {
       defaultSettings: {
         'ritualType': ['guided'],
         'tone': ['dreamy'],
-        'voice': ['female'],
+        'voice': ['male'],
         'duration': ['2'],
       },
     ),
@@ -176,7 +176,7 @@ class RitualDataProvider {
       defaultSettings: {
         'ritualType': ['guided'],
         'tone': ['dreamy'],
-        'voice': ['female'],
+        'voice': ['male'],
         'duration': ['2'],
       },
     ),
@@ -197,7 +197,7 @@ class RitualDataProvider {
       defaultSettings: {
         'ritualType': ['guided'],
         'tone': ['dreamy'],
-        'voice': ['female'],
+        'voice': ['male'],
         'duration': ['2'],
       },
     ),
@@ -218,7 +218,7 @@ class RitualDataProvider {
       defaultSettings: {
         'ritualType': ['guided'],
         'tone': ['dreamy'],
-        'voice': ['female'],
+        'voice': ['male'],
         'duration': ['2'],
       },
     ),

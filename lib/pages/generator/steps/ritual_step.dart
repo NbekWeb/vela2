@@ -96,10 +96,20 @@ class _RitualStepState extends State<RitualStep> {
     final durationList = ritual.defaultSettings['duration'] as List<String>;
     final durationString = durationList.isNotEmpty ? durationList.first : '';
 
+    // Preserve user's voice selection if they have already chosen one
+    final currentVoice = widget.profileData.voice?.isNotEmpty == true 
+        ? widget.profileData.voice!.first 
+        : voiceString;
+    
+    print('🔍 Debug - Ritual step voice selection:');
+    print('  profileData.voice: ${widget.profileData.voice}');
+    print('  voiceString (ritual default): $voiceString');
+    print('  currentVoice (final): $currentVoice');
+
     final updatedProfileData = widget.profileData.copyWith(
       ritualType: [ritualTypeString], // String ni List<String> ga o'tkazish
       tone: [toneString],
-      voice: [voiceString],
+      voice: [currentVoice], // Use user's selection or default
       duration: [durationString],
       planType: ritual.id, // plan_type ni ritual ID siga teng qilamiz
     );
@@ -122,6 +132,7 @@ class _RitualStepState extends State<RitualStep> {
       tone: toneString,
       duration: durationString,
       planType: ritual.id,
+      voice: currentVoice, // Pass the preserved voice
     );
 
     widget.onProfileDataChanged(updatedProfileData);

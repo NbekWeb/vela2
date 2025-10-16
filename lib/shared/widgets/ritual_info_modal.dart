@@ -287,9 +287,28 @@ class _CustomizeRitualModalState extends State<CustomizeRitualModal> {
                       itemLabels: voices.map((e) => e['label']!).toList(),
                       onChanged: (v) {
                         setState(() => voice = v!);
-                        widget.onProfileDataChanged(
-                          widget.profileData.copyWith(voice: [v ?? '']),
+                        final updatedProfile = widget.profileData.copyWith(
+                          voice: [v ?? ''],
                         );
+                        widget.onProfileDataChanged(updatedProfile);
+
+                        // Force update the meditation store with the new voice
+                        final meditationStore = Provider.of<MeditationStore>(
+                          context,
+                          listen: false,
+                        );
+                        meditationStore.setMeditationProfile(updatedProfile);
+
+                        // Also save the voice to storage immediately
+                        meditationStore.saveRitualSettings(
+                          ritualType: ritualType,
+                          tone: tone,
+                          duration: duration.toString(),
+                          planType: widget.profileData.planType ?? 1,
+                          voice: v!,
+                        );
+
+                        print('Voice selected: $v'); // Debug print
                       },
                     ),
                     AppStyles.spacingSmall,
