@@ -1,7 +1,7 @@
 import 'dart:ui';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../../core/stores/auth_store.dart';
 import '../themes/app_styles.dart';
 
 class ExitModal extends StatelessWidget {
@@ -92,13 +92,19 @@ class ExitModal extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
+                        onPressed: () async {
                           Navigator.of(context).pop();
-                          // Exit the app
-                          if (Platform.isAndroid) {
-                            SystemNavigator.pop();
-                          } else {
-                            exit(0);
+                          
+                          // Clear tokens and logout
+                          final authStore = context.read<AuthStore>();
+                          await authStore.logout();
+                          
+                          // Navigate to login page and clear navigation stack
+                          if (context.mounted) {
+                            Navigator.of(context).pushNamedAndRemoveUntil(
+                              '/login',
+                              (route) => false,
+                            );
                           }
                         },
                         style: ElevatedButton.styleFrom(
@@ -109,7 +115,7 @@ class ExitModal extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         child: Text(
-                          'Exit',
+                          'Exit app?',
                           style: AppStyles.bodyMedium.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w600,

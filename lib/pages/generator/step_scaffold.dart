@@ -120,7 +120,7 @@ class StepScaffold extends StatelessWidget {
                         ),
                         if (showTitles) ...[
                           const Text(
-                            'Dream life intake',
+                            'Dream Life Intake',
                             style: TextStyle(
                               fontFamily: 'Canela',
                               fontWeight: FontWeight.w400,
@@ -149,27 +149,50 @@ class StepScaffold extends StatelessWidget {
                   // Content area
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              title,
-                              style: const TextStyle(
-                                fontFamily: 'Canela',
-                                fontWeight: FontWeight.w300,
-                                fontSize: 36,
-                                color: Color(0xFFF2EFEA),
+                      padding: const EdgeInsets.only(
+                        left: 16.0,
+                        right: 16.0,
+                        top: 0,
+                      ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: constraints.maxHeight,
                               ),
-                              textAlign: TextAlign.center,
+                              child: IntrinsicHeight(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Transform.translate(
+                                      offset: const Offset(0, -30),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            title,
+                                            style: const TextStyle(
+                                              fontFamily: 'Canela',
+                                              fontWeight: FontWeight.w300,
+                                              fontSize: 36,
+                                              color: Color(0xFFF2EFEA),
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                          const SizedBox(height: 20),
+                                          child,
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            const SizedBox(height: 20),
-                            child,
-                          ],
-                        ),
+                          );
+                        },
                       ),
                     ),
                   ),

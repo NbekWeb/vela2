@@ -14,6 +14,10 @@ class ApiService {
       connectTimeout: const Duration(minutes: 10),
       receiveTimeout: const Duration(minutes: 10),
       sendTimeout: const Duration(minutes: 10),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
     ),
   );
 
@@ -106,9 +110,16 @@ class ApiService {
     Map<String, dynamic>? headers,
   }) async {
     
+    // Merge headers with default Content-Type
+    final mergedHeaders = <String, dynamic>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      ...?headers,
+    };
+    
     final options = Options(
       method: method,
-      headers: headers,
+      headers: mergedHeaders,
       extra: {'open': open},
     );
     
@@ -124,6 +135,12 @@ class ApiService {
       return response;
     } catch (e) {
       print('❌ API Error: $e');
+      if (e is DioException && e.response != null) {
+        print('❌ Response status: ${e.response?.statusCode}');
+        print('❌ Response data: ${e.response?.data}');
+        print('❌ Request data: ${e.requestOptions.data}');
+        print('❌ Request headers: ${e.requestOptions.headers}');
+      }
       rethrow;
     }
   }

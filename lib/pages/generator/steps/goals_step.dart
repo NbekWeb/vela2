@@ -121,7 +121,7 @@ class _GoalsStepState extends State<GoalsStep> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Specific goals',
+                      'Specific Goals',
                       style: TextStyle(
                         fontFamily: 'Canela',
                         fontWeight: FontWeight.w300,

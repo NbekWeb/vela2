@@ -2,9 +2,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../themes/app_styles.dart';
-import 'generating_meditation.dart';
 import '../models/meditation_profile_data.dart';
 import '../../core/stores/meditation_store.dart';
+import 'package:vela/pages/meditation_streaming_page.dart';
 
 class RitualInfoModal extends StatelessWidget {
   final String title;
@@ -378,14 +378,11 @@ class _CustomizeRitualModalState extends State<CustomizeRitualModal> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () async {
+                          // To'g'ridan-to'g'ri meditation_streaming_page ga o'tish
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => GeneratingMeditation(
-                                profileData: widget
-                                    .profileData, // Profile ma'lumotlarini uzatamiz
-                                isDirectRitual: widget.isDirectRitual,
-                              ),
+                              builder: (_) => const MeditationStreamingPage(),
                             ),
                           );
                         },

@@ -5,12 +5,14 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'dart:developer' as developer;
 import 'dart:typed_data';
 import 'dart:io';
+import 'package:dio/dio.dart';
 import '../services/api_service.dart';
 import '../../shared/models/user_model.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import '../services/superwall_service.dart';
 
 // Pinia store ga o'xshash AuthStore - API chaqiruvlar va ma'lumotlarni saqlash
 class AuthStore extends ChangeNotifier {
@@ -112,6 +114,20 @@ class AuthStore extends ChangeNotifier {
 
   void setUser(UserModel? user) {
     _user = user;
+    
+    // Register user with SuperwallKit for payment tracking
+    if (user != null && user.id.isNotEmpty) {
+      try {
+        final superwallService = SuperwallService();
+        if (superwallService.isInitialized) {
+          superwallService.registerUser(user.id);
+        }
+      } catch (e) {
+        developer.log('⚠️ Error registering user with SuperwallKit: $e');
+        // Don't block user flow if SuperwallKit registration fails
+      }
+    }
+    
     notifyListeners();
   }
 
@@ -249,8 +265,9 @@ class AuthStore extends ChangeNotifier {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
-        developer.log('❌ Google Sign-In was cancelled');
-        setError('Google Sign-In was cancelled');
+        developer.log('🔍 Google Sign-In was cancelled by user');
+        // Foydalanuvchi dialog'ni bekor qilgan - bu xato emas, shunchaki bekor qilindi
+        // Error o'rnatmaymiz, chunki bu normal holat
         return;
       }
 
@@ -260,6 +277,7 @@ class AuthStore extends ChangeNotifier {
         auth = await googleUser.authentication;
       } catch (authError) {
         developer.log('❌ Auth error: $authError');
+        setError('Failed to get authentication data. Please try again.');
         return;
       }
 
@@ -280,7 +298,7 @@ class AuthStore extends ChangeNotifier {
           final firebaseUser = userCredential.user;
 
           if (firebaseUser != null) {
-            // ID token'ni global variable'ga saqlash
+            // Firebase ID token'ni olish (Firebase'dan)
             _lastIdToken = auth.idToken;
 
             // Google ID token'ni olish (Firebase emas, Google'dan to'g'ridan-to'g'ri)
@@ -288,8 +306,7 @@ class AuthStore extends ChangeNotifier {
 
             // Firebase login API ga so'rov yuborish
             try {
-              developer.log('🔍 Sending Google ID token to backend: ${googleIdToken?.length != null && googleIdToken!.length > 20 ? googleIdToken.substring(0, 20) : googleIdToken}...');
-              
+              print('🔍 Sending Google ID token to backend: ${googleIdToken}');
               final response = await ApiService.request(
                 url: 'auth/firebase/login/',
                 method: 'POST',
@@ -298,8 +315,8 @@ class AuthStore extends ChangeNotifier {
               );
 
               developer.log('🔍 Backend response: ${response.data}');
-            developer.log('🔍 Response status: ${response.statusCode}');
-            developer.log('🔍 Response headers: ${response.headers}');
+              developer.log('🔍 Response status: ${response.statusCode}');
+              developer.log('🔍 Response headers: ${response.headers}');
               developer.log('🔍 Response status: ${response.statusCode}');
               developer.log('🔍 Response headers: ${response.headers}');
 
@@ -324,15 +341,21 @@ class AuthStore extends ChangeNotifier {
                   onNewUser?.call();
                 }
               } else {
-                developer.log('❌ No access token in response: ${response.data}');
-                setError('Backend authentication failed. No access token received.');
+                developer.log(
+                  '❌ No access token in response: ${response.data}',
+                );
+                setError(
+                  'Backend authentication failed. No access token received.',
+                );
               }
             } catch (e) {
               developer.log('❌ Backend API error: $e');
-              
+
               // Check if it's a 401 error specifically
               if (e.toString().contains('401')) {
-                setError('Server authentication failed. Please check backend configuration.');
+                setError(
+                  'Server authentication failed. Please check backend configuration.',
+                );
               } else if (e.toString().contains('400')) {
                 setError('Invalid token format. Please try again.');
               } else if (e.toString().contains('500')) {
@@ -435,16 +458,15 @@ class AuthStore extends ChangeNotifier {
         final firebaseUser = userCredential.user;
 
         if (firebaseUser != null) {
-          // ID token'ni global variable'ga saqlash
           _lastIdToken = credential.identityToken;
-
-          // Apple ID token'ni olish (Firebase emas, Apple'dan to'g'ridan-to'g'ri)
           final appleIdToken = credential.identityToken;
 
           // Firebase login API ga so'rov yuborish
           try {
-              developer.log('🔍 Sending Apple ID token to backend: ${appleIdToken?.length != null && appleIdToken!.length > 20 ? appleIdToken.substring(0, 20) : appleIdToken}...');
-            
+            developer.log(
+              '🔍 Sending Firebase ID token to backend: ${appleIdToken}',
+            );
+
             final response = await ApiService.request(
               url: 'auth/firebase/login/',
               method: 'POST',
@@ -478,14 +500,18 @@ class AuthStore extends ChangeNotifier {
               }
             } else {
               developer.log('❌ No access token in response: ${response.data}');
-              setError('Backend authentication failed. No access token received.');
+              setError(
+                'Backend authentication failed. No access token received.',
+              );
             }
           } catch (e) {
             developer.log('❌ Backend API error: $e');
-            
+
             // Check if it's a 401 error specifically
             if (e.toString().contains('401')) {
-              setError('Server authentication failed. Please check backend configuration.');
+              setError(
+                'Server authentication failed. Please check backend configuration.',
+              );
             } else if (e.toString().contains('400')) {
               setError('Invalid token format. Please try again.');
             } else if (e.toString().contains('500')) {
@@ -753,7 +779,7 @@ class AuthStore extends ChangeNotifier {
     try {
       // Clear all secure storage data
       await _secureStorage.deleteAll();
-      
+
       // Clear social auth sessions
       if (!kIsWeb) {
         await _googleSignIn.signOut();
@@ -772,7 +798,7 @@ class AuthStore extends ChangeNotifier {
       ApiService.setMemoryToken(null);
 
       notifyListeners();
-      
+
       developer.log('✅ All user data cleared successfully');
     } catch (e) {
       developer.log('❌ Error clearing all data: $e');
@@ -1166,7 +1192,8 @@ class AuthStore extends ChangeNotifier {
 
       onSuccess?.call();
     } catch (e) {
-      String errorMessage = 'Failed to send password reset email. Please try again.';
+      String errorMessage =
+          'Failed to send password reset email. Please try again.';
 
       if (e.toString().contains('400')) {
         errorMessage = 'User with this email address not found.';
@@ -1215,6 +1242,27 @@ class AuthStore extends ChangeNotifier {
       // Toast will be shown from the UI layer
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Check goals - send checked goal item IDs to API
+  Future<void> checkGoals({required List<int> goalsItemIds}) async {
+    try {
+      developer.log('🔍 Sending check-goals request with IDs: $goalsItemIds');
+      final response = await ApiService.request(
+        url: 'auth/check-goals/',
+        method: 'POST',
+        data: {'goals_item_ids': goalsItemIds},
+        headers: {'Content-Type': 'application/json'},
+      );
+      developer.log('✅ Check goals response: ${response.data}');
+    } catch (e) {
+      developer.log('❌ Check goals error: $e');
+      if (e is DioException && e.response != null) {
+        developer.log('❌ Response status: ${e.response?.statusCode}');
+        developer.log('❌ Response data: ${e.response?.data}');
+      }
+      rethrow;
     }
   }
 }

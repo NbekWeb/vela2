@@ -106,6 +106,9 @@ class _RitualStepState extends State<RitualStep> {
     print('  voiceString (ritual default): $voiceString');
     print('  currentVoice (final): $currentVoice');
 
+    // Ritual ID ni string sifatida saqlash (1, 2, 3, 4)
+    final ritualIdString = ritual.id.toString();
+
     final updatedProfileData = widget.profileData.copyWith(
       ritualType: [ritualTypeString], // String ni List<String> ga o'tkazish
       tone: [toneString],
@@ -127,12 +130,14 @@ class _RitualStepState extends State<RitualStep> {
     await meditationStore.clearRitualSettings();
 
     // Yangi ma'lumotlarni saqlash
+    // Ritual ID ni ritualType sifatida saqlash (1, 2, 3, 4)
     await meditationStore.saveRitualSettings(
-      ritualType: ritualTypeString,
+      ritualType: ritualIdString, // '1', '2', '3', '4'
       tone: toneString,
       duration: durationString,
       planType: ritual.id,
       voice: currentVoice, // Pass the preserved voice
+      ritualId: ritualIdString, // ritual_id ni ham saqlash (String formatida)
     );
 
     widget.onProfileDataChanged(updatedProfileData);

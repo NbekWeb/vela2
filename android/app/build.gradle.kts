@@ -29,7 +29,7 @@ android {
         applicationId = "com.nbekdev.vela"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 23  // Firebase Auth requires minSdk 23
+        minSdk = 26  // superwallkit_flutter requires minSdk 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

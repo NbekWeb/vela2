@@ -1,9 +1,9 @@
+import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import '../../../core/stores/auth_store.dart';
-import '../../../shared/models/user_model.dart';
 
 class GoalsList extends StatefulWidget {
   const GoalsList({super.key});
@@ -13,98 +13,160 @@ class GoalsList extends StatefulWidget {
 }
 
 class _GoalsListState extends State<GoalsList> {
-  List<LifeVision> _lifeVisions = [];
+  // Track temporarily checked items (before API response)
+  Set<int> _pendingCheckedIds = {};
 
   @override
-  void initState() {
-    super.initState();
-    _loadLifeVisions();
-  }
-
-  Future<void> _loadLifeVisions() async {
-    final authStore = Provider.of<AuthStore>(context, listen: false);
-    final lifeVisions = await authStore.getProfileDataWithLifeVisions();
-    setState(() {
-      _lifeVisions = lifeVisions;
-    });
-  }
-
-  Future<void> _onGoalSelected(int index) async {
-    final authStore = Provider.of<AuthStore>(context, listen: false);
-    
-    // Define hardcoded goals
-    final goals = [
-      'Daily meditation',
-      'Authentic self',
-      'Dream vision',
-    ];
-    
-    // Determine vision type based on goal index
-    String newVisionType = 'north_star';
-    if (index == 0) {
-      newVisionType = 'north_star';
-    } else if (index == 1) {
-      newVisionType = 'goal';
-    } else if (index == 2) {
-      newVisionType = 'dream';
-    }
-    
-    // Update UI immediately - handle multiple selections
-    if (_lifeVisions.isNotEmpty) {
-      final currentVisionTypes = List<String>.from(_lifeVisions[0].visionType);
-      
-      // Toggle the vision type - add if not present, remove if present
-      if (currentVisionTypes.contains(newVisionType)) {
-        // Only allow removal if there's more than one selection
-        if (currentVisionTypes.length > 1) {
-          currentVisionTypes.remove(newVisionType);
-        } else {
-          // If this is the last selection, show warning toast
-          Fluttertoast.showToast(
-            msg: 'At least one goal must be selected',
-            toastLength: Toast.LENGTH_SHORT,
-            gravity: ToastGravity.TOP,
-            backgroundColor: Colors.orange,
-            textColor: Colors.white,
-          );
-          return; // Don't update the state
+  Widget build(BuildContext context) {
+    return Consumer<AuthStore>(
+      builder: (context, authStore, child) {
+        final user = authStore.user;
+        
+        // Get checked item IDs from check_goals_list
+        Set<int> checkedItemIds = {};
+        if (user?.checkGoalsList != null && user!.checkGoalsList.isNotEmpty) {
+          checkedItemIds = user.checkGoalsList
+              .where((item) => item['id'] != null)
+              .map((item) => item['id'] as int)
+              .toSet();
         }
-      } else {
-        currentVisionTypes.add(newVisionType);
-      }
+        
+        // Get ALL items from goals_generate_list and filter out checked ones (show only unchecked)
+        // But include pending checked items in the list (they will be shown as checked)
+        List<Map<String, dynamic>> goalItems = [];
+        if (user?.goalsGenerateList != null && user!.goalsGenerateList.isNotEmpty) {
+          // Extract items from all goals_generate_list entries
+          for (var goalGroup in user.goalsGenerateList) {
+            if (goalGroup['items'] != null && goalGroup['items'] is List) {
+              final items = goalGroup['items'] as List;
+              for (var item in items) {
+                if (item is Map<String, dynamic> && 
+                    item['item'] != null && 
+                    item['id'] != null) {
+                  final itemId = item['id'] as int;
+                  // Add if NOT in check_goals_list (unchecked items)
+                  // OR if it's pending (will be shown as checked but still in list)
+                  if (!checkedItemIds.contains(itemId) || _pendingCheckedIds.contains(itemId)) {
+                    goalItems.add({
+                      'id': itemId,
+                      'item': item['item'].toString(),
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+        // If all goals are checked (no unchecked items), show message
+        if (goalItems.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Text(
+                'All your goals are accomplished',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w400,
+                  fontFamily: 'Satoshi',
+                ),
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          children: goalItems.map((goalItem) {
+            final itemId = goalItem['id'] as int;
+            final goalText = goalItem['item'].toString();
+            final isChecked = _pendingCheckedIds.contains(itemId);
+
+            return GestureDetector(
+              onTap: () {
+                _onGoalItemToggled(itemId, checkedItemIds, authStore);
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    // Custom circle with selection indicator
+                    Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isChecked
+                            ? const Color(0xFF3B6EAA)
+                            : Colors.transparent,
+                        border: isChecked
+                            ? null
+                            : Border.all(color: const Color(0xFF3B6EAA), width: 1),
+                      ),
+                      child: isChecked
+                          ? const Icon(
+                              Icons.check,
+                              color: Color(0xFFFFFFFF),
+                              size: 12,
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        goalText,
+                        style: TextStyle(
+                          color: const Color(0xFF3B6EAA),
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Satoshi',
+                          fontSize: 12.sp,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Future<void> _onGoalItemToggled(int itemId, Set<int> currentCheckedIds, AuthStore authStore) async {
+    // Add to pending checked items immediately for UI update
+    setState(() {
+      _pendingCheckedIds.add(itemId);
+    });
+    
+    // Add this item to checked list
+    final newCheckedIds = Set<int>.from(currentCheckedIds)..add(itemId);
+    
+    try {
+      developer.log('📤 Sending to API: ${newCheckedIds.toList()}');
       
-      // Update UI immediately
+      // Send to API
+      await authStore.checkGoals(goalsItemIds: newCheckedIds.toList());
+      
+      // Refresh user data after successful API call
+      await authStore.getUserDetails();
+      
+      // Remove from pending after API response (item will be removed from list)
       setState(() {
-        _lifeVisions[0] = _lifeVisions[0].copyWith(visionType: currentVisionTypes);
+        _pendingCheckedIds.remove(itemId);
+      });
+    } catch (e) {
+      // Remove from pending on error
+      setState(() {
+        _pendingCheckedIds.remove(itemId);
       });
       
-      // Sync with API in background
-      _syncWithAPI(authStore, _lifeVisions[0].id, currentVisionTypes);
-    } else {
-      // If life_visions is empty, create new one
-      final newVision = await authStore.createLifeVision(
-        title: goals[index],
-        description: 'Goal description for ${goals[index]}',
-        visionType: newVisionType,
-      );
-      
-      if (newVision != null) {
-        // Reload data after POST
-        await _loadLifeVisions();
-      }
-    }
-  }
-  
-  // Background API sync method
-  Future<void> _syncWithAPI(AuthStore authStore, int visionId, List<String> visionTypes) async {
-    try {
-      await authStore.updateLifeVisionType(
-        visionId: visionId,
-        newVisionType: visionTypes,
-      );
-    } catch (e) {
-      // If API call fails, revert the UI state
-      await _loadLifeVisions();
       Fluttertoast.showToast(
         msg: 'Failed to update goals. Please try again.',
         toastLength: Toast.LENGTH_SHORT,
@@ -114,86 +176,4 @@ class _GoalsListState extends State<GoalsList> {
       );
     }
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final goals = [
-      'Daily meditation',
-      'Authentic self',
-      'Dream vision',
-    ];
-
-    return Column(
-      children: goals.asMap().entries.map((entry) {
-        final index = entry.key;
-        final goalText = entry.value;
-        
-        // Determine if this goal is selected based on vision_type
-        bool isSelected = false;
-        if (_lifeVisions.isNotEmpty) {
-          final vision = _lifeVisions[0]; // Get the first (and only) vision
-          
-          // Check if this goal's vision type is in the vision_type array
-          if (index == 0 && vision.visionType.contains('north_star')) {
-            isSelected = true; // First goal selected
-          } else if (index == 1 && vision.visionType.contains('goal')) {
-            isSelected = true; // Second goal selected
-          } else if (index == 2 && vision.visionType.contains('dream')) {
-            isSelected = true; // Third goal selected
-          }
-        }
-
-        return GestureDetector(
-          onTap: () {
-            _onGoalSelected(index);
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                // Custom circle with selection indicator
-                Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected
-                        ? const Color(0xFF3B6EAA)
-                        : Colors.transparent,
-                    border: isSelected
-                        ? null
-                        : Border.all(color: const Color(0xFF3B6EAA), width: 1),
-                  ),
-                  child: isSelected
-                      ? const Icon(
-                          Icons.check,
-                          color: Color(0xFFFFFFFF),
-                          size: 12,
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    goalText,
-                    style: TextStyle(
-                      color: const Color(0xFF3B6EAA),
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'Satoshi',
-                      fontSize: 12.sp,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-} 
+}

@@ -13,6 +13,8 @@ class VideoBackgroundWrapper extends StatefulWidget {
   final double topOffset;
   final bool showControls;
   final bool isMuted;
+  final VoidCallback? onBack;
+  final bool showBackButton;
 
   const VideoBackgroundWrapper({
     super.key,
@@ -20,6 +22,8 @@ class VideoBackgroundWrapper extends StatefulWidget {
     this.topOffset = 0,
     this.showControls = true,
     this.isMuted = false,
+    this.onBack,
+    this.showBackButton = true,
   });
 
   @override
@@ -86,13 +90,6 @@ class _VideoBackgroundWrapperState extends State<VideoBackgroundWrapper> {
     }
   }
 
-  void _toggleMute() {
-    setState(() {
-      _isMuted = !_isMuted;
-      _controller?.setVolume(_isMuted ? 0.0 : 1.0);
-    });
-  }
-
   @override
   void dispose() {
     // Don't dispose the controller here as it's managed by VideoLoader
@@ -131,37 +128,46 @@ class _VideoBackgroundWrapperState extends State<VideoBackgroundWrapper> {
                   // Header with controls
                   if (widget.showControls)
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 30,
-                        vertical: 28,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
                         children: [
-                          GestureDetector(
-                            onTap: _toggleMute,
-                            child: SvgIcon(
-                              assetName: _isMuted
-                                  ? 'assets/icons/mute.svg'
-                                  : 'assets/icons/unmute.svg',
-                              color: StarterPageStyles.iconColor,
-                              size: 30,
-                            ),
-                          ),
-                          SvgPicture.asset(
-                            'assets/icons/logo.svg',
-                            width: 60,
-                            height: 40,
-                          ),
-                          GestureDetector(
-                            onTap: () {
-                              openPopupFromTop(context, const StarterModal());
-                            },
-                            child: SvgIcon(
-                              assetName: 'assets/icons/brain.svg',
-                              color: StarterPageStyles.iconColor,
-                              size: 30,
-                            ),
+                          const SizedBox(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Opacity(
+                                opacity: widget.showBackButton ? 1.0 : 0.0,
+                                child: IconButton(
+                                  icon: const Icon(
+                                    Icons.arrow_back,
+                                    color: BaseStyles.white,
+                                    size: 30,
+                                  ),
+                                  onPressed: widget.showBackButton && widget.onBack != null
+                                      ? widget.onBack
+                                      : null,
+                                ),
+                              ),
+                              Expanded(
+                                child: Center(
+                                  child: SvgPicture.asset(
+                                    'assets/icons/logo.svg',
+                                    width: 60,
+                                    height: 40,
+                                  ),
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () {
+                                  openPopupFromTop(context, const StarterModal());
+                                },
+                                child: SvgIcon(
+                                  assetName: 'assets/icons/brain.svg',
+                                  color: StarterPageStyles.iconColor,
+                                  size: 30,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

@@ -5,7 +5,6 @@ import '../../shared/widgets/video_background_wrapper.dart';
 import '../../styles/components/button_styles.dart';
 import '../../styles/components/text_styles.dart';
 import '../../styles/components/spacing_styles.dart';
-import '../../styles/base_styles.dart';
 
 class OnboardingPage4 extends StatefulWidget {
   const OnboardingPage4({super.key});
@@ -32,6 +31,8 @@ class _OnboardingPage4State extends State<OnboardingPage4> {
       topOffset: 0,
       showControls: true,
       isMuted: false,
+      showBackButton: true,
+      onBack: () => Navigator.pop(context),
       child: Column(
         children: [
           // Main content

@@ -45,6 +45,7 @@ echo "📦 Archiving app..."
 xcodebuild -workspace Runner.xcworkspace \
            -scheme Runner \
            -configuration Release \
+           -destination "generic/platform=iOS" \
            -archivePath build/Runner.xcarchive \
            clean archive
 

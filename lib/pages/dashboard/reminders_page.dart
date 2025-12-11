@@ -103,6 +103,7 @@ class _RemindersPageState extends State<RemindersPage> {
         url: 'auth/create-device-token/',
         method: 'POST',
         data: data,
+        open: true, // This endpoint doesn't require authentication
       );
     } catch (e) {
       // Silent error handling

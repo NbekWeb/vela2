@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../shared/widgets/svg_icon.dart';
 import '../../../shared/widgets/profile_edit_modal.dart';
 
+// Keep the old class for backwards compatibility but create new one
 class NeuroplasticityButton extends StatefulWidget {
   const NeuroplasticityButton({super.key});
 
@@ -39,12 +40,6 @@ class _NeuroplasticityButtonState extends State<NeuroplasticityButton> {
     await prefs.setString('neuroplasticity_content', _neuroplasticityContent);
   }
 
-  // Clear neuroplasticity state (for logout)
-  static Future<void> clearNeuroplasticityState() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('neuroplasticity_active');
-    await prefs.remove('neuroplasticity_content');
-  }
 
   void _showNeuroplasticityModal() {
     showDialog(
@@ -185,6 +180,122 @@ class _NeuroplasticityButtonState extends State<NeuroplasticityButton> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// New always-visible Neuroplasticity card
+class NeuroplasticityCard extends StatefulWidget {
+  const NeuroplasticityCard({super.key});
+
+  @override
+  State<NeuroplasticityCard> createState() => _NeuroplasticityCardState();
+}
+
+class _NeuroplasticityCardState extends State<NeuroplasticityCard> {
+  String _neuroplasticityContent =
+      'Embarking on a journey to realize my dreams has been transformative. I feel most alive when I chase my aspirations and stay true to who I am.';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNeuroplasticityState();
+  }
+
+  // Load neuroplasticity state from SharedPreferences
+  Future<void> _loadNeuroplasticityState() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _neuroplasticityContent =
+          prefs.getString('neuroplasticity_content') ?? _neuroplasticityContent;
+    });
+  }
+
+  void _showNeuroplasticityModal() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: ProfileEditModal(
+            title: 'Neuroplasticity',
+            prompt:
+                'Describe how neuroplasticity is helping you transform your brain and achieve your goals.',
+            hintText:
+                'Embarking on a journey to realize my dreams has been transformative. I feel most alive when I chase my aspirations and stay true to who I am.',
+            initialValue: _neuroplasticityContent,
+            onSave: (String newContent) async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('neuroplasticity_content', newContent);
+              setState(() {
+                _neuroplasticityContent = newContent;
+              });
+              Navigator.of(context).pop();
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // Title outside the card
+        Row(
+          children: [
+            Text(
+              'Neuroplasticity',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16.sp,
+                fontFamily: 'Satoshi',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: _showNeuroplasticityModal,
+              child: const SvgIcon(
+                assetName: 'assets/icons/edit.svg',
+                size: 16,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Card
+        Container(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: const Color.fromRGBO(164, 199, 234, 0.5),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Content
+              Center(
+                child: Text(
+                  _neuroplasticityContent,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'Satoshi',
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

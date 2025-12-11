@@ -116,6 +116,9 @@ class UserModel {
   final String? happiness;
   final WeeklyLoginStats? weeklyLoginStats;
   final List<CheckIn> checkIns;
+  final int? goalsCount;
+  final List<Map<String, dynamic>> checkGoalsList;
+  final List<Map<String, dynamic>> goalsGenerateList;
 
   UserModel({
     required this.id,
@@ -133,6 +136,9 @@ class UserModel {
     this.happiness,
     this.weeklyLoginStats,
     this.checkIns = const [],
+    this.goalsCount,
+    this.checkGoalsList = const [],
+    this.goalsGenerateList = const [],
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -165,6 +171,42 @@ class UserModel {
     // Parse user_detail nested object
     final userDetail = json['user_detail'] as Map<String, dynamic>?;
     
+    // Parse goals_count and check_goals_list
+    int? goalsCount;
+    if (json['goals_count'] != null) {
+      goalsCount = json['goals_count'] is int 
+          ? json['goals_count'] 
+          : int.tryParse(json['goals_count'].toString());
+    }
+    
+    List<Map<String, dynamic>> checkGoalsList = [];
+    try {
+      if (json['check_goals_list'] != null && json['check_goals_list'] is List) {
+        final list = json['check_goals_list'] as List;
+        checkGoalsList = list
+            .where((item) => item != null && item is Map<String, dynamic>)
+            .map((item) => item as Map<String, dynamic>)
+            .toList();
+      }
+    } catch (e) {
+      // If parsing fails, use empty list
+      checkGoalsList = [];
+    }
+    
+    List<Map<String, dynamic>> goalsGenerateList = [];
+    try {
+      if (json['goals_generate_list'] != null && json['goals_generate_list'] is List) {
+        final list = json['goals_generate_list'] as List;
+        goalsGenerateList = list
+            .where((item) => item != null && item is Map<String, dynamic>)
+            .map((item) => item as Map<String, dynamic>)
+            .toList();
+      }
+    } catch (e) {
+      // If parsing fails, use empty list
+      goalsGenerateList = [];
+    }
+    
     return UserModel(
       id: json['id']?.toString() ?? '',
       firstName: json['first_name'] ?? '',
@@ -183,6 +225,9 @@ class UserModel {
       happiness: userDetail?['happiness'],
       weeklyLoginStats: weeklyStats,
       checkIns: checkInsList,
+      goalsCount: goalsCount,
+      checkGoalsList: checkGoalsList,
+      goalsGenerateList: goalsGenerateList,
     );
   }
 
@@ -225,6 +270,9 @@ class UserModel {
     String? happiness,
     WeeklyLoginStats? weeklyLoginStats,
     List<CheckIn>? checkIns,
+    int? goalsCount,
+    List<Map<String, dynamic>>? checkGoalsList,
+    List<Map<String, dynamic>>? goalsGenerateList,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -242,6 +290,9 @@ class UserModel {
       happiness: happiness ?? this.happiness,
       weeklyLoginStats: weeklyLoginStats ?? this.weeklyLoginStats,
       checkIns: checkIns ?? this.checkIns,
+      goalsCount: goalsCount ?? this.goalsCount,
+      checkGoalsList: checkGoalsList ?? this.checkGoalsList,
+      goalsGenerateList: goalsGenerateList ?? this.goalsGenerateList,
     );
   }
 } 

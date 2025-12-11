@@ -4,10 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:flutter/services.dart';
 import 'stars_animation.dart';
-import '../../pages/sleep_stream_meditation_page.dart';
 import '../../pages/dashboard/main.dart';
 import '../../core/stores/meditation_store.dart';
 import '../../shared/models/meditation_profile_data.dart';
+import '../../pages/meditation_streaming_page.dart';
 
 class GeneratingMeditation extends StatefulWidget {
   final String title;
@@ -36,7 +36,6 @@ class _GeneratingMeditationState extends State<GeneratingMeditation>
   VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _wasPlayingBeforePause = false;
-  bool _isGenerating = true;
   String _statusMessage =
       'We\'re shaping your vision\ninto a meditative journey...';
 
@@ -154,98 +153,52 @@ class _GeneratingMeditationState extends State<GeneratingMeditation>
       // Force reload ritual settings from storage to ensure latest values
       await meditationStore.loadRitualSettings();
 
-      // Storage dan ma'lumotlarni o'qish
+      // Storage dan ma'lumotlarni o'qish va profile ga saqlash
       final storedRitualType = meditationStore.storedRitualType;
       final storedTone = meditationStore.storedTone;
       final storedDuration = meditationStore.storedDuration;
+      final storedVoice = meditationStore.storedVoice;
 
-      // Auth store dan yangi ma'lumotlarni ustun qo'yish
-      final ritualTypeValue = storedRitualType?.isNotEmpty == true
-          ? storedRitualType!
-          : (widget.profileData!.ritualType?.isNotEmpty == true
-                ? widget.profileData!.ritualType!.first
-                : '');
-      final toneValue = storedTone?.isNotEmpty == true
-          ? storedTone!
-          : (widget.profileData!.tone?.isNotEmpty == true
-                ? widget.profileData!.tone!.first
-                : '');
-      final durationValue = storedDuration?.isNotEmpty == true
-          ? storedDuration!
-          : (widget.profileData!.duration?.isNotEmpty == true
-                ? widget.profileData!.duration!.first
-                : '5');
-
-      // Profile ma'lumotlarini API ga yuborish
-      bool hasError = false;
-
-      await meditationStore.postCombinedProfile(
-        gender: widget.profileData!.gender ?? '',
-        dream: widget.profileData!.dream?.isNotEmpty == true
-            ? widget.profileData!.dream!.first
-            : '',
-        goals: widget.profileData!.goals?.isNotEmpty == true
-            ? widget.profileData!.goals!.first
-            : '',
-        ageRange: widget.profileData!.ageRange ?? '',
-        happiness: widget.profileData!.happiness?.isNotEmpty == true
-            ? widget.profileData!.happiness!.first
-            : '',
-        name: widget.profileData!.name ?? '',
-        description: widget.profileData!.description ?? '',
-        ritualType: ritualTypeValue,
-        tone: toneValue,
-        voice: widget.profileData!.voice?.isNotEmpty == true
-            ? widget.profileData!.voice!.first
-            : 'male',
-        duration: durationValue,
-        planType: widget.profileData!.planType,
-        isDirectRitual: widget.isDirectRitual,
-        onError: () {
-          hasError = true;
-
-          // Clear navigation stack to prevent back navigation to auth pages
-          Navigator.of(context).pushNamedAndRemoveUntil(
-            '/dashboard', 
-            (route) {
-              // Keep only dashboard and its sub-routes, remove auth pages
-              return route.settings.name == '/dashboard' || 
-                     route.settings.name == '/my-meditations' ||
-                     route.settings.name == '/archive' ||
-                     route.settings.name == '/vault' ||
-                     route.settings.name == '/generator';
-            }
-          );
-        },
+      // Profile ma'lumotlarini yangilash va saqlash
+      final updatedProfileData = widget.profileData!.copyWith(
+        ritualType: storedRitualType?.isNotEmpty == true
+            ? [storedRitualType!]
+            : widget.profileData!.ritualType,
+        tone: storedTone?.isNotEmpty == true
+            ? [storedTone!]
+            : widget.profileData!.tone,
+        duration: storedDuration?.isNotEmpty == true
+            ? [storedDuration!]
+            : widget.profileData!.duration,
+        voice: storedVoice?.isNotEmpty == true
+            ? [storedVoice!]
+            : widget.profileData!.voice,
       );
 
-      // Faqat xatolik bo'lmagan taqdirda success navigation qilish
-      if (!hasError && mounted) {
-        setState(() {
-          _isGenerating = false;
-        });
+      // Save updated profile to store
+      meditationStore.setMeditationProfile(updatedProfileData);
 
-        if (mounted) {
-          // Navigate to sleep meditation page using MaterialPageRoute
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => SleepStreamMeditationPage(
-                isDirectRitual: widget.isDirectRitual,
-              ),
-            ),
-          );
-        }
+      // Qisqa kutish (UI ko'rsatish uchun)
+      await Future.delayed(const Duration(seconds: 1));
+
+      // To'g'ridan-to'g'ri meditation_streaming_page ga o'tish - streaming u yerda boshlanadi
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const MeditationStreamingPage(),
+          ),
+        );
       }
     } catch (e) {
-      // Error occurred during meditation generation
+      print('⚠️ Error in _startProfileGeneration: $e');
+      _showErrorAndNavigate();
     }
   }
 
   void _showErrorAndNavigate() {
     if (mounted) {
       setState(() {
-        _isGenerating = false;
         _statusMessage = 'Something went wrong.\nPlease try again.';
       });
 
@@ -382,7 +335,7 @@ class _GeneratingMeditationState extends State<GeneratingMeditation>
               ),
               const SizedBox(height: 16),
               Text(
-                _statusMessage, // Dinamik status xabari
+                _statusMessage,
                 style: const TextStyle(
                   color: Color(0xFFF2EFEA),
                   fontSize: 16,
@@ -392,7 +345,6 @@ class _GeneratingMeditationState extends State<GeneratingMeditation>
                 ),
                 textAlign: TextAlign.center,
               ),
-
               SizedBox(height: widget.bottomPadding),
             ],
           ),

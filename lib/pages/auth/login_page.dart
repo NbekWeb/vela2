@@ -143,11 +143,13 @@ class _LoginPageState extends State<LoginPage> {
       },
     );
 
-    print('🔍 Google Sign-In completed, error: ${authStore.error}');
-
     // Handle error if success callback wasn't called
+    // Note: Cancelled sign-in is not an error, so we only show errors if they exist
     if (authStore.error != null && mounted) {
-      ToastService.showWarningToast(context, message: authStore.error!);
+      // Don't show toast for cancelled sign-in - it's not an error
+      if (!authStore.error!.toLowerCase().contains('cancelled')) {
+        ToastService.showWarningToast(context, message: authStore.error!);
+      }
     }
   }
 
@@ -570,7 +572,7 @@ class _LoginPageState extends State<LoginPage> {
                                                     );
                                                   },
                                                   child: Text(
-                                                    'Are you forgot password?',
+                                                    'Forgot Password?',
                                                     style: TextStyle(
                                                       fontSize: 16.sp,
                                                       color: Colors.white,

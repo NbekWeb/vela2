@@ -106,7 +106,7 @@ class _VaultPageState extends State<VaultPage> {
                         ),
                         const SizedBox(height: 4),
                         const Text(
-                          'A living reflection of the future you\'re building',
+                          'Your personal vault of meditations — made for you and ready anytime.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontFamily: 'Satoshi',

@@ -7,6 +7,7 @@ import 'components/plan_info_card.dart';
 import '../shared/widgets/auth.dart';
 import '../shared/widgets/exit_confirmation_dialog.dart';
 import '../core/stores/auth_store.dart';
+import '../core/services/superwall_service.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 enum PlanStep { choosePlan, dreamLifeIntro }
@@ -113,9 +114,21 @@ class _PlanPageState extends State<PlanPage> {
                 ),
                 onPressed: () async {
                   final authStore = context.read<AuthStore>();
+                  
+                  print('🔵 ========== START MY FREE TRIAL BUTTON PRESSED ==========');
+                  print('🔵 Current user: ${authStore.user?.id ?? "not logged in"}');
+                  
+                  // Call API to assign free trial
+                  print('🔵 ========== Assigning free trial via API ==========');
                   await authStore.assignFreeTrial();
+                  
                   if (!authStore.isLoading && authStore.error == null) {
+                    print('✅ Free trial assigned successfully via API');
+                    print('🔵 Going to next step');
                     _goToNextStep();
+                  } else {
+                    print('⚠️ Free trial assignment failed or still loading');
+                    print('⚠️ Error: ${authStore.error}');
                   }
                 },
                 child: const Text(

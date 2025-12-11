@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-class LifeVisionCard extends StatelessWidget {
-  final double? height;
+class HappinessCard extends StatelessWidget {
   final VoidCallback onEdit;
   final String? content;
 
-  const LifeVisionCard({
+  const HappinessCard({
     super.key,
-    this.height,
     required this.onEdit,
     this.content,
   });
@@ -16,6 +14,7 @@ class LifeVisionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: const Color.fromRGBO(164, 199, 234, 0.5),
@@ -23,32 +22,12 @@ class LifeVisionCard extends StatelessWidget {
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title row
-          Row(
-            children: [
-              Icon(Icons.star_outline, color: Colors.white, size: 16),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Your North Star',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Satoshi',
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
           // Content - auto height
           Text(
             content ??
-                'I feel most authentic when I embrace my true self. I am focused on pursuing my passions.',
-            textAlign: TextAlign.center,
+                'What makes you happy?',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.9),
               fontSize: 12.sp,

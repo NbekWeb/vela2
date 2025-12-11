@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:provider/provider.dart';
+import '../../core/stores/auth_store.dart';
 
 class ExitConfirmationDialog extends StatelessWidget {
   final String title;
@@ -13,8 +15,8 @@ class ExitConfirmationDialog extends StatelessWidget {
     super.key,
     this.title = 'Exit?',
     this.message = 'Are you sure you want to exit?',
-    this.stayButtonText = 'Stay',
-    this.exitButtonText = 'Exit',
+    this.stayButtonText = 'Stay ',
+    this.exitButtonText = 'Exit ',
     this.onExit,
   });
 
@@ -23,7 +25,7 @@ class ExitConfirmationDialog extends StatelessWidget {
     String title = 'Exit?',
     String message = 'Are you sure you want to exit?',
     String stayButtonText = 'Stay',
-    String exitButtonText = 'Exit',
+    String exitButtonText = 'Exit ',
     VoidCallback? onExit,
   }) {
     return showDialog<bool>(
@@ -97,13 +99,23 @@ class ExitConfirmationDialog extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   Navigator.of(context).pop(true);
+                  
                   if (onExit != null) {
                     onExit!();
                   } else {
-                    // Default behavior: exit the app
-                    SystemNavigator.pop();
+                    // Default behavior: logout and navigate to login
+                    final authStore = context.read<AuthStore>();
+                    await authStore.logout();
+                    
+                    if (context.mounted) {
+                      // Navigate to login page and clear navigation stack
+                      Navigator.of(context).pushNamedAndRemoveUntil(
+                        '/login',
+                        (route) => false,
+                      );
+                    }
                   }
                 },
                 style: ElevatedButton.styleFrom(

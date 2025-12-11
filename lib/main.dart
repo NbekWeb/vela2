@@ -29,6 +29,8 @@ import 'pages/dashboard/reminders_page.dart';
 import 'pages/edit_info_page.dart';
 import 'pages/dashboard/components/dashboard_audio_player.dart';
 import 'core/utils/video_loader.dart';
+import 'core/services/superwall_service.dart';
+import 'package:superwallkit_flutter/superwallkit_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'firebase_options.dart';
@@ -75,6 +77,34 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Initialize SuperwallKit for payments
+  // Superwall API key from https://superwall.com/dashboard
+  // According to Superwall documentation, configure should be called in main.dart
+  try {
+    // Determine Superwall API Key for platform
+    // For now using same key for both platforms, but can be different
+    const superwallApiKey = String.fromEnvironment(
+      'SUPERWALL_API_KEY',
+      defaultValue: 'pk_pJRetlpqb1kyNrf0WFCUQ', // Superwall API key
+    );
+    
+    if (superwallApiKey.isNotEmpty) {
+      // Configure Superwall - this creates a shared instance
+      Superwall.configure(superwallApiKey);
+      
+      // Also initialize our service wrapper for additional functionality
+      final superwallService = SuperwallService();
+      await superwallService.initialize(superwallApiKey);
+      print('✅ SuperwallKit initialized successfully with API key');
+    } else {
+      print('⚠️ SuperwallKit API key not provided. Payment features will be disabled.');
+    }
+  } catch (e, stackTrace) {
+    print('⚠️ Failed to initialize SuperwallKit: $e');
+    print('🔵 Stack trace: $stackTrace');
+    // Continue app initialization even if SuperwallKit fails
+  }
 
   // Initialize stores
   final authStore = AuthStore();

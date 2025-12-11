@@ -4,14 +4,12 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:vela/pages/auth/onboarding_page_2.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:dio/dio.dart';
 import 'dart:io';
 import '../../core/services/api_service.dart';
 import '../../shared/widgets/video_background_wrapper.dart';
 import '../../styles/components/button_styles.dart';
 import '../../styles/components/text_styles.dart';
 import '../../styles/components/spacing_styles.dart';
-import '../../styles/base_styles.dart';
 
 class OnboardingPage1 extends StatefulWidget {
   const OnboardingPage1({super.key});
@@ -224,6 +222,7 @@ class _OnboardingPage1State extends State<OnboardingPage1> {
       topOffset: 0,
       showControls: true,
       isMuted: false,
+      showBackButton: false,
       child: Column(
         children: [
           // Main content

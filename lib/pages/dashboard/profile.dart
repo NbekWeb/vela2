@@ -83,8 +83,8 @@ class _DashboardProfilePageState extends State<DashboardProfilePage> {
 
                         const SizedBox(height: 30),
 
-                        // Neuroplasticity button
-                        const NeuroplasticityButton(),
+                        // Neuroplasticity - always visible
+                        const NeuroplasticityCard(),
 
                         const SizedBox(
                           height: 25,
