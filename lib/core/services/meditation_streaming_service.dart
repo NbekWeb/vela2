@@ -15,6 +15,7 @@ class MeditationStreamingService {
   StreamSubscription<List<int>>? _streamSub;
   File? _tempAudioFile;
   final List<Uint8List> _pcmChunks = [];
+  Timer? _fileUpdateDebounceTimer; // Debounce timer for file updates
 
   // Callbacks
   Function(List<Uint8List>)? onChunkReceived;
@@ -22,6 +23,7 @@ class MeditationStreamingService {
   Function(String)? onError;
   Function(bool)? onStreamingStateChanged;
   Function(int)? onProgressUpdate;
+  Function(File)? onFileUpdated; // Called when file is updated with new chunks
 
   /// Start streaming meditation audio
   Future<File?> startStreaming(
@@ -31,6 +33,7 @@ class MeditationStreamingService {
     Function(String)? onErrorCallback,
     Function(bool)? onStateChanged,
     Function(int)? onProgress,
+    Function(File)? onFileUpdate,
   }) async {
     // Set callbacks
     onChunkReceived = onChunk;
@@ -38,6 +41,7 @@ class MeditationStreamingService {
     onError = onErrorCallback;
     onStreamingStateChanged = onStateChanged;
     onProgressUpdate = onProgress;
+    onFileUpdated = onFileUpdate;
 
     try {
       _client = http.Client();
@@ -47,8 +51,14 @@ class MeditationStreamingService {
       String? ritualType;
       if (context != null) {
         try {
-          final meditationStore = Provider.of<MeditationStore>(context, listen: false);
-          ritualType = meditationStore.storedRitualType ?? meditationStore.storedRitualId ?? '1';
+          final meditationStore = Provider.of<MeditationStore>(
+            context,
+            listen: false,
+          );
+          ritualType =
+              meditationStore.storedRitualType ??
+              meditationStore.storedRitualId ??
+              '1';
         } catch (e) {
           ritualType = '1';
         }
@@ -58,20 +68,13 @@ class MeditationStreamingService {
 
       final endpoint = getEndpoint(ritualType);
       final requestBody = buildRequestBody(context);
-      print('🔵 ========== Starting stream request ==========');
-      print('🔵 RitualType: $ritualType');
-      print('🔵 Endpoint: $endpoint');
-      print('🔵 Request body: ${jsonEncode(requestBody)}');
 
       final request = http.Request('POST', Uri.parse(endpoint));
 
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(requestBody);
 
-      print('🔵 Sending request to: $endpoint');
       final streamedResponse = await _client!.send(request);
-      print('🔵 Response status: ${streamedResponse.statusCode}');
-      print('🔵 Response headers: ${streamedResponse.headers}');
 
       if (streamedResponse.statusCode < 200 ||
           streamedResponse.statusCode >= 300) {
@@ -109,24 +112,28 @@ class MeditationStreamingService {
             0,
             (sum, c) => sum + c.length,
           );
-          
+
           // Calculate audio duration in seconds
           final bytesPerSecond = SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE;
           final audioSeconds = totalBytes / bytesPerSecond;
           final requiredBytes = 2 * SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE;
-          
-          // Debug: Stream hajmi va sekundlarni ko'rsatish
-          print('🔵 Stream chunk: chunkSize=${chunk.length} bytes, totalBytes=$totalBytes bytes (${(totalBytes / 1024).toStringAsFixed(2)} KB), audioSeconds=${audioSeconds.toStringAsFixed(2)}s, requiredBytes=$requiredBytes (2s)');
-          
+
           onProgressUpdate?.call(totalBytes);
           onChunkReceived?.call(_pcmChunks);
 
           // Create/update WAV file with current chunks
           try {
             final wav = createWavBytes(_pcmChunks, SAMPLE_RATE, CHANNELS);
-            final wavSize = wav.length;
-            print('🔵 WAV file size: $wavSize bytes (${(wavSize / 1024).toStringAsFixed(2)} KB)');
             await _tempAudioFile!.writeAsBytes(wav);
+            
+            // Debounce file update notifications to avoid too frequent updates
+            // This prevents audio player from being updated too frequently
+            // Increased debounce time to prevent Android freezing
+            _fileUpdateDebounceTimer?.cancel();
+            _fileUpdateDebounceTimer = Timer(const Duration(milliseconds: 1000), () {
+              // Notify that file has been updated (debounced)
+              onFileUpdated?.call(_tempAudioFile!);
+            });
           } catch (e, stackTrace) {
             print('⚠️ Stack trace: $stackTrace');
           }
@@ -136,36 +143,27 @@ class MeditationStreamingService {
             0,
             (sum, c) => sum + c.length,
           );
-          
+
           // Calculate final audio duration
           final bytesPerSecond = SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE;
           final finalAudioSeconds = totalBytes / bytesPerSecond;
-          
-          print('🔵 ========== Stream to\'liq tugadi ==========');
-          print('🔵 Total bytes: $totalBytes (${(totalBytes / 1024).toStringAsFixed(2)} KB)');
-          print('🔵 Final audio duration: ${finalAudioSeconds.toStringAsFixed(2)} seconds (${(finalAudioSeconds / 60).toStringAsFixed(2)} minutes)');
-          print('🔵 Total chunks: ${_pcmChunks.length}');
-          
+
           if (_pcmChunks.isNotEmpty) {
             try {
               final wav = createWavBytes(_pcmChunks, SAMPLE_RATE, CHANNELS);
               final wavSize = wav.length;
-              print('🔵 Final WAV file size: $wavSize bytes (${(wavSize / 1024).toStringAsFixed(2)} KB)');
 
               if (_tempAudioFile != null) {
                 await _tempAudioFile!.writeAsBytes(wav);
-                print('✅ WAV file written successfully to: ${_tempAudioFile!.path}');
               }
               onStreamingStateChanged?.call(false);
 
               onStreamComplete?.call(wav);
             } catch (e, stackTrace) {
-              print('❌ WAV creation error: $e');
               onStreamingStateChanged?.call(false);
               onError?.call("WAV creation error: $e");
             }
-          } else {
-            print('❌ Empty stream from server');
+          } else {;
             onStreamingStateChanged?.call(false);
             onError?.call("Empty stream from server");
           }
@@ -187,6 +185,8 @@ class MeditationStreamingService {
 
   /// Stop streaming
   Future<void> stopStreaming() async {
+    _fileUpdateDebounceTimer?.cancel();
+    _fileUpdateDebounceTimer = null;
     _streamSub?.cancel();
     _streamSub = null;
     _client?.close();
@@ -207,11 +207,12 @@ class MeditationStreamingService {
 
   /// Dispose resources
   Future<void> dispose() async {
+    _fileUpdateDebounceTimer?.cancel();
+    _fileUpdateDebounceTimer = null;
     await stopStreaming();
     // Clean up temp file
     if (_tempAudioFile != null) {
       _tempAudioFile!.delete().catchError((e) {
-        print('⚠️ Error deleting temp file: $e');
         return _tempAudioFile!;
       });
     }

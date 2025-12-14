@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:provider/provider.dart';
 import 'package:just_audio/just_audio.dart' as just_audio;
 import 'package:audio_waveforms/audio_waveforms.dart';
@@ -8,10 +9,12 @@ import 'package:share_plus/share_plus.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dio/dio.dart';
 import 'dart:ui'; // Added for ImageFilter
 import '../../../shared/widgets/stars_animation.dart';
 import '../../../shared/widgets/personalized_meditation_modal.dart';
 import '../../../shared/widgets/full_width_track_shape.dart';
+import '../../../shared/widgets/wave_visualization.dart';
 import '../../../core/stores/meditation_store.dart';
 import '../../../core/stores/like_store.dart';
 import '../../../core/services/api_service.dart';
@@ -52,6 +55,8 @@ class _DashboardAudioPlayerState extends State<DashboardAudioPlayer> {
   bool _isDragging = false;
   bool _wasPlayingBeforeDrag = false;
   String? fileUrl;
+  List<Uint8List> _pcmChunks = [];
+  bool _isLoadingWaveform = false;
 
   @override
   void initState() {
@@ -160,11 +165,31 @@ class _DashboardAudioPlayerState extends State<DashboardAudioPlayer> {
           }
         });
 
-        _audioPlayer!.durationStream.listen((duration) {
+        _audioPlayer!.durationStream.listen((duration) async {
           if (mounted) {
             setState(() {
               _duration = duration ?? const Duration(minutes: 3, seconds: 29);
             });
+            // Auto-play when duration is available (audio is ready)
+            if (duration != null && duration.inSeconds >= 1 && !_isPlaying) {
+              try {
+                await _audioPlayer!.play();
+                if (_waveformReady && _waveformController != null) {
+                  try {
+                    _waveformController!.startPlayer();
+                  } catch (e) {
+                    // Error starting waveform
+                  }
+                }
+                if (mounted) {
+                  setState(() {
+                    _isPlaying = true;
+                  });
+                }
+              } catch (e) {
+                // Error auto-playing
+              }
+            }
           }
         });
 
@@ -180,7 +205,20 @@ class _DashboardAudioPlayerState extends State<DashboardAudioPlayer> {
           _isAudioReady = true;
         });
 
+        // Prepare waveform after audio is ready
         await _prepareWaveform();
+        
+        // If PCM chunks are still empty after prepare, try loading again
+        if (_pcmChunks.isEmpty && fileUrl != null && fileUrl!.isNotEmpty) {
+          print('🔄 [DashboardAudioPlayer] PCM chunks empty, retrying waveform load...');
+          await _loadAudioFileForWaveform();
+          
+          // If still empty, try one more time after a short delay
+          if (_pcmChunks.isEmpty) {
+            await Future.delayed(const Duration(milliseconds: 500));
+            await _loadAudioFileForWaveform();
+          }
+        }
       } else {
         setState(() {
           _isAudioReady = true;
@@ -195,21 +233,104 @@ class _DashboardAudioPlayerState extends State<DashboardAudioPlayer> {
 
   Future<void> _prepareWaveform() async {
     try {
-      if (_waveformController != null) {
+      if (_waveformController != null && fileUrl != null && fileUrl!.isNotEmpty) {
+        setState(() {
+          _isLoadingWaveform = true;
+        });
+
         await _waveformController!.preparePlayer(
-          path: fileUrl ?? '',
+          path: fileUrl!,
           shouldExtractWaveform: true,
           noOfSamples: 80,
         );
 
+        // Load audio file and extract PCM data for wave visualization
+        await _loadAudioFileForWaveform();
+
         if (mounted) {
           setState(() {
             _waveformReady = true;
+            _isLoadingWaveform = false;
           });
         }
       }
     } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingWaveform = false;
+        });
+      }
       // Error preparing waveform
+    }
+  }
+
+  Future<void> _loadAudioFileForWaveform() async {
+    try {
+      if (fileUrl == null || fileUrl!.isEmpty) {
+        print('⚠️ [DashboardAudioPlayer] fileUrl is null or empty');
+        return;
+      }
+
+      print('🔄 [DashboardAudioPlayer] Loading waveform from: $fileUrl');
+
+      Uint8List audioBytes;
+
+      // Check if fileUrl is a URL or local file path
+      if (fileUrl!.startsWith('http://') || fileUrl!.startsWith('https://')) {
+        // Download audio file from URL using Dio
+        print('🔄 [DashboardAudioPlayer] Downloading from URL...');
+        final dio = Dio();
+        final response = await dio.get<Uint8List>(
+          fileUrl!,
+          options: Options(responseType: ResponseType.bytes),
+        );
+        audioBytes = response.data ?? Uint8List(0);
+        print('✅ [DashboardAudioPlayer] Downloaded ${audioBytes.length} bytes');
+      } else {
+        // Read audio file from local path
+        print('🔄 [DashboardAudioPlayer] Reading local file...');
+        final file = File(fileUrl!);
+        if (!await file.exists()) {
+          print('⚠️ [DashboardAudioPlayer] File does not exist: $fileUrl');
+          return;
+        }
+        audioBytes = await file.readAsBytes();
+        print('✅ [DashboardAudioPlayer] Read ${audioBytes.length} bytes from file');
+      }
+      
+      // Extract PCM data from WAV file
+      // WAV file structure: 44 bytes header + PCM data
+      if (audioBytes.length > 44) {
+        // Skip WAV header (44 bytes) and extract PCM data
+        final pcmData = audioBytes.sublist(44);
+        print('🔄 [DashboardAudioPlayer] Extracted ${pcmData.length} bytes of PCM data');
+        
+        // Split into chunks for visualization (similar to streaming)
+        const chunkSize = 8192; // 8KB chunks
+        _pcmChunks.clear();
+        
+        for (int i = 0; i < pcmData.length; i += chunkSize) {
+          final end = (i + chunkSize < pcmData.length) ? i + chunkSize : pcmData.length;
+          _pcmChunks.add(pcmData.sublist(i, end));
+        }
+
+        print('✅ [DashboardAudioPlayer] Created ${_pcmChunks.length} PCM chunks');
+
+        if (mounted) {
+          setState(() {});
+        }
+      } else {
+        print('⚠️ [DashboardAudioPlayer] Audio file too small: ${audioBytes.length} bytes');
+      }
+    } catch (e, stackTrace) {
+      print('❌ [DashboardAudioPlayer] Error loading audio file for waveform: $e');
+      print('❌ [DashboardAudioPlayer] Stack trace: $stackTrace');
+      // Error loading audio file for waveform - fallback to empty chunks
+      if (mounted) {
+        setState(() {
+          _pcmChunks.clear();
+        });
+      }
     }
   }
 
@@ -783,100 +904,173 @@ class _DashboardAudioPlayerState extends State<DashboardAudioPlayer> {
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                // Improved Slider
-                                AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
+                                // Show slider first (while file is loading), then show wave effect when file is loaded
+                                if (_isAudioReady && _pcmChunks.isNotEmpty && !_isLoadingWaveform) ...[
+                                  // Wave visualization with scrubbing - shown after file is loaded
+                                  LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      return SizedBox(
+                                        height: 40,
+                                        child: GestureDetector(
+                                          onTapDown: _isAudioReady
+                                              ? (details) async {
+                                                  if (_duration.inMilliseconds > 0) {
+                                                    final tapX =
+                                                        details.localPosition.dx;
+                                                    final width =
+                                                        constraints.maxWidth;
+                                                    final progress = (tapX / width)
+                                                        .clamp(0.0, 1.0);
+                                                    final seekPosition = Duration(
+                                                      milliseconds:
+                                                          (_duration.inMilliseconds *
+                                                                  progress)
+                                                              .round(),
+                                                    );
+                                                    await _audioPlayer?.seek(
+                                                      seekPosition,
+                                                    );
+                                                    setState(() {
+                                                      _position = seekPosition;
+                                                    });
+                                                  }
+                                                }
+                                              : null,
+                                          onPanUpdate: _isAudioReady
+                                              ? (details) async {
+                                                  if (_duration.inMilliseconds > 0) {
+                                                    final tapX =
+                                                        details.localPosition.dx;
+                                                    final width =
+                                                        constraints.maxWidth;
+                                                    final progress = (tapX / width)
+                                                        .clamp(0.0, 1.0);
+                                                    final seekPosition = Duration(
+                                                      milliseconds:
+                                                          (_duration.inMilliseconds *
+                                                                  progress)
+                                                              .round(),
+                                                    );
+                                                    await _audioPlayer?.seek(
+                                                      seekPosition,
+                                                    );
+                                                    setState(() {
+                                                      _position = seekPosition;
+                                                    });
+                                                  }
+                                                }
+                                              : null,
+                                          onPanStart: _isAudioReady
+                                              ? (details) {
+                                                  setState(() {
+                                                    _isDragging = true;
+                                                    _wasPlayingBeforeDrag = _isPlaying;
+                                                  });
+                                                  // Pause audio while seeking
+                                                  if (_isPlaying) {
+                                                    _audioPlayer?.pause();
+                                                  }
+                                                }
+                                              : null,
+                                          onPanEnd: _isAudioReady
+                                              ? (details) async {
+                                                  setState(() {
+                                                    _isDragging = false;
+                                                  });
+                                                  // Resume audio after seeking if it was playing before drag
+                                                  if (_wasPlayingBeforeDrag) {
+                                                    await _audioPlayer?.play();
+                                                  }
+                                                }
+                                              : null,
+                                          child: WaveVisualization(
+                                            pcmChunks: _pcmChunks,
+                                            height: 40,
+                                            duration: _duration,
+                                            position: _position,
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
-                                  child: SliderTheme(
-                                    data: SliderTheme.of(context).copyWith(
-                                      trackHeight: 6,
-                                      activeTrackColor: const Color(0xFFC9DFF4),
-                                      inactiveTrackColor: Colors.white
-                                          .withOpacity(0.3),
-                                      thumbColor: _isDragging
-                                          ? const Color(0xFFC9DFF4)
-                                          : Colors.white,
-                                      overlayColor: Colors.white.withOpacity(
-                                        0.2,
-                                      ),
-                                      thumbShape: const RoundSliderThumbShape(
-                                        enabledThumbRadius: 8,
-                                        disabledThumbRadius: 8,
-                                        elevation: 4,
-                                      ),
-                                      overlayShape:
-                                          const RoundSliderOverlayShape(
-                                            overlayRadius: 20,
-                                          ),
-                                      trackShape: const AudioSliderTrackShape(),
+                                ] else if (_isAudioReady) ...[
+                                  // Slider shown initially (while file is loading)
+                                  // Fallback to simple slider if waveform not loaded
+                                  AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
                                     ),
-                                    child: Slider(
-                                      value: _position.inSeconds
-                                          .toDouble()
-                                          .clamp(
-                                            0,
-                                            _duration.inSeconds.toDouble(),
-                                          ),
-                                      min: 0,
-                                      max: _duration.inSeconds.toDouble(),
-                                      onChanged: (value) async {
-                                        // If this is the first change during drag, pause audio
-                                        if (!_isDragging && _isPlaying) {
-                                          print(
-                                            'DEBUG: First drag detected, pausing audio',
+                                    child: SliderTheme(
+                                      data: SliderTheme.of(context).copyWith(
+                                        trackHeight: 6,
+                                        activeTrackColor: const Color(0xFFC9DFF4),
+                                        inactiveTrackColor: Colors.white
+                                            .withOpacity(0.3),
+                                        thumbColor: _isDragging
+                                            ? const Color(0xFFC9DFF4)
+                                            : Colors.white,
+                                        overlayColor: Colors.white.withOpacity(
+                                          0.2,
+                                        ),
+                                        thumbShape: const RoundSliderThumbShape(
+                                          enabledThumbRadius: 8,
+                                          disabledThumbRadius: 8,
+                                          elevation: 4,
+                                        ),
+                                        overlayShape:
+                                            const RoundSliderOverlayShape(
+                                              overlayRadius: 20,
+                                            ),
+                                        trackShape: const AudioSliderTrackShape(),
+                                      ),
+                                      child: Slider(
+                                        value: _position.inSeconds
+                                            .toDouble()
+                                            .clamp(
+                                              0,
+                                              _duration.inSeconds.toDouble(),
+                                            ),
+                                        min: 0,
+                                        max: _duration.inSeconds.toDouble(),
+                                        onChanged: (value) async {
+                                          if (!_isDragging && _isPlaying) {
+                                            await _audioPlayer?.pause();
+                                            setState(() {
+                                              _isDragging = true;
+                                              _wasPlayingBeforeDrag = true;
+                                            });
+                                          }
+
+                                          final newPosition = Duration(
+                                            seconds: value.toInt(),
                                           );
-                                          await _audioPlayer?.pause();
+                                          await _audioPlayer?.seek(newPosition);
+                                          setState(() {
+                                            _position = newPosition;
+                                          });
+                                        },
+                                        onChangeStart: (value) {
                                           setState(() {
                                             _isDragging = true;
-                                            _wasPlayingBeforeDrag = true;
+                                            _wasPlayingBeforeDrag = _isPlaying;
                                           });
-                                        }
-
-                                        final newPosition = Duration(
-                                          seconds: value.toInt(),
-                                        );
-                                        await _audioPlayer?.seek(newPosition);
-                                        setState(() {
-                                          _position = newPosition;
-                                        });
-                                      },
-                                      onChangeStart: (value) {
-                                        print(
-                                          'DEBUG: Slider onChangeStart - isPlaying: $_isPlaying',
-                                        );
-                                        setState(() {
-                                          _isDragging = true;
-                                          _wasPlayingBeforeDrag = _isPlaying;
-                                        });
-                                        // Pause audio while seeking
-                                        if (_isPlaying) {
-                                          print(
-                                            'DEBUG: Pausing audio during seek',
-                                          );
-                                          _audioPlayer?.pause();
-                                        }
-                                      },
-                                      onChangeEnd: (value) async {
-                                        print(
-                                          'DEBUG: Slider onChangeEnd - wasPlayingBeforeDrag: $_wasPlayingBeforeDrag',
-                                        );
-                                        setState(() {
-                                          _isDragging = false;
-                                        });
-                                        // Resume audio after seeking if it was playing before drag
-                                        if (_wasPlayingBeforeDrag) {
-                                          print(
-                                            'DEBUG: Resuming audio after seek',
-                                          );
-                                          await _audioPlayer?.play();
-                                          // The audio player state listener will update _isPlaying automatically
-                                        }
-                                      },
+                                          if (_isPlaying) {
+                                            _audioPlayer?.pause();
+                                          }
+                                        },
+                                        onChangeEnd: (value) async {
+                                          setState(() {
+                                            _isDragging = false;
+                                          });
+                                          if (_wasPlayingBeforeDrag) {
+                                            await _audioPlayer?.play();
+                                          }
+                                        },
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                                 const SizedBox(height: 16),
                                 // Progress indicator
                                 if (_isDragging)

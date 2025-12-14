@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:typed_data';
 import 'dart:math' as math;
+import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dio/dio.dart';
 import '../../core/stores/auth_store.dart';
 import '../../core/stores/meditation_store.dart';
+import '../../core/services/api_service.dart';
 
 const String BASE_ENDPOINT = "http://31.97.98.47:8000";
 const int SAMPLE_RATE = 44100;
@@ -115,17 +119,17 @@ Map<String, dynamic> buildRequestBody(BuildContext? context) {
           dreamlife = profile.dream!.join(", ");
         }
 
-        // Get dream activities (same as dreamlife for now)
-        dreamActivities = dreamlife;
-
-        // Get ritual settings - handle null safety and capitalize for API
-        if (meditationStore.storedRitualType != null &&
-            meditationStore.storedRitualType!.isNotEmpty) {
-          ritualType = capitalizeRitualType(meditationStore.storedRitualType!);
-        } else if (profile?.ritualType != null &&
-            profile!.ritualType!.isNotEmpty) {
-          ritualType = capitalizeRitualType(profile.ritualType!.first);
+        // Get dream activities (happiness stepdagi ma'lumot)
+        if (user != null && user.happiness != null && user.happiness!.isNotEmpty) {
+          dreamActivities = user.happiness!;
+        } else if (profile != null &&
+            profile.happiness != null &&
+            profile.happiness!.isNotEmpty) {
+          dreamActivities = profile.happiness!.join(", ");
         }
+
+        // Ritual type har doim "Story" bo'lishi kerak
+        ritualType = "Story";
 
         if (meditationStore.storedTone != null &&
             meditationStore.storedTone!.isNotEmpty) {
@@ -151,16 +155,22 @@ Map<String, dynamic> buildRequestBody(BuildContext? context) {
           length = int.tryParse(durationStr) ?? 2;
         }
 
-        print(
-          '🔵 Using user data: name=$name, ritualType=$ritualType, tone=$tone, voice=$voice, length=$length',
-        );
+        // Get check_in - oxirgi check-in dan description yoki checkInChoice olish
+        if (user != null && user.checkIns.isNotEmpty) {
+          final lastCheckIn = user.checkIns.last;
+          // Avval description ni tekshirish, bo'sh bo'lsa checkInChoice ni olish
+          checkIn = lastCheckIn.description.isNotEmpty
+              ? lastCheckIn.description
+              : lastCheckIn.checkInChoice.isNotEmpty
+                  ? lastCheckIn.checkInChoice
+                  : "string";
+        }
+        
       } catch (providerError) {
         print('⚠️ Provider error (stores not available): $providerError');
-        print('⚠️ Using default values');
+     
       }
-    } catch (e, stackTrace) {
-      print('⚠️ Error getting user data: $e');
-      print('⚠️ Stack trace: $stackTrace');
+    } catch (e) {
       print('⚠️ Using default values');
     }
   } else {
@@ -168,7 +178,7 @@ Map<String, dynamic> buildRequestBody(BuildContext? context) {
   }
 
   return {
-    "ritual_type": "Story",
+    "ritual_type": ritualType,
     "name": name,
     "goals": goals.isNotEmpty ? goals : "Inner peace and personal growth",
     "dreamlife": dreamlife.isNotEmpty
@@ -266,4 +276,214 @@ List<double> extractAmplitudes(List<Uint8List> pcmChunks, int maxSamples) {
   }
 
   return samples;
+}
+
+/// Create meditation with WAV file upload
+/// Bu funksiya streaming tugagach WAV faylni /meditation/create-with-file/ API ga yuboradi
+Future<Map<String, dynamic>?> createMeditationWithFile({
+  required BuildContext context,
+  required Uint8List wavBytes,
+}) async {
+  try {
+    // Ma'lumotlarni olish
+    final requestBody = buildRequestBody(context);
+    
+    // Plan type ni olish
+    final meditationStore = Provider.of<MeditationStore>(context, listen: false);
+    final planType = meditationStore.storedPlanType ?? 1;
+    
+    // API ga yuborish uchun data tayyorlash
+    // API kichik harflarni kutmoqda, shuning uchun toLowerCase() qilamiz
+    final ritualTypeValue = (requestBody['ritual_type'] ?? 'Story').toString().toLowerCase();
+    final toneValue = (requestBody['tone'] ?? 'Dreamy').toString().toLowerCase();
+    final voiceValue = (requestBody['voice'] ?? 'Female').toString().toLowerCase();
+    
+    print('🔄 [createMeditationWithFile] API formatga o\'girilgan qiymatlar:');
+    print('   - ritual_type: "${requestBody['ritual_type']}" -> "$ritualTypeValue"');
+    print('   - tone: "${requestBody['tone']}" -> "$toneValue"');
+    print('   - voice: "${requestBody['voice']}" -> "$voiceValue"');
+    print('   - plan_type: $planType (type: ${planType.runtimeType})');
+    
+    final data = <String, dynamic>{
+      'plan_type': planType,
+      'ritual_type': ritualTypeValue,
+      'tone': toneValue,
+      'voice': voiceValue,
+      'duration': requestBody['length']?.toString() ?? '2',
+    };
+    
+    // Qo'shimcha ma'lumotlarni qo'shish
+    if (requestBody['name'] != null && requestBody['name'].toString().isNotEmpty) {
+      data['name'] = requestBody['name'];
+    }
+    if (requestBody['goals'] != null && requestBody['goals'].toString().isNotEmpty) {
+      data['goals'] = requestBody['goals'];
+    }
+    if (requestBody['dreamlife'] != null && requestBody['dreamlife'].toString().isNotEmpty) {
+      data['dreamlife'] = requestBody['dreamlife'];
+    }
+    if (requestBody['dream_activities'] != null && requestBody['dream_activities'].toString().isNotEmpty) {
+      data['dream_activities'] = requestBody['dream_activities'];
+    }
+    if (requestBody['check_in'] != null && requestBody['check_in'].toString().isNotEmpty && requestBody['check_in'] != 'string') {
+      data['check_in'] = requestBody['check_in'];
+    }
+    
+    // WAV faylni form data sifatida qo'shish
+    // ApiService.uploadFile avtomatik ravishda Uint8List ni MultipartFile ga aylantiradi
+    data['file_wav'] = wavBytes;
+    
+    // Debug: Request data ni print qilish
+    print('🔄 [createMeditationWithFile] Request data keys: ${data.keys.toList()}');
+    print('🔄 [createMeditationWithFile] WAV file size: ${wavBytes.length} bytes');
+    print('🔄 [createMeditationWithFile] Data fields:');
+    data.forEach((key, value) {
+      if (key != 'file_wav') {
+        print('   - $key: $value');
+      } else {
+        print('   - $key: Uint8List(${wavBytes.length} bytes)');
+      }
+    });
+    
+    // API ga form data (multipart/form-data) sifatida yuborish
+    // file_wav parametri MultipartFile sifatida yuboriladi
+    print('🔄 [createMeditationWithFile] API ga request yuborilmoqda...');
+    print('🔄 [createMeditationWithFile] URL: auth/meditation/create-with-file/');
+    
+    final response = await ApiService.uploadFile(
+      url: 'auth/meditation/create-with-file/',
+      method: 'POST',
+      data: data,
+    );
+    
+    print('✅ [createMeditationWithFile] API dan javob keldi: ${response.statusCode}');
+    
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      // Account update allaqachon parallel yuborilgan, shuning uchun bu yerda qayta yubormaymiz
+      print('✅ [createMeditationWithFile] Meditation muvaffaqiyatli yaratildi');
+      return response.data as Map<String, dynamic>?;
+    } else {
+      print('❌ Error creating meditation: ${response.statusCode}');
+      print('❌ Response data: ${response.data}');
+      return null;
+    }
+  } catch (e) {
+    print('❌ Error creating meditation with file: $e');
+    
+    // DioException bo'lsa, batafsil ma'lumotlarni print qilish
+    if (e is DioException) {
+      print('❌ DioException details:');
+      print('   - Type: ${e.type}');
+      print('   - Message: ${e.message}');
+      print('   - Request path: ${e.requestOptions.path}');
+      print('   - Request method: ${e.requestOptions.method}');
+      print('   - Request data: ${e.requestOptions.data}');
+      print('   - Request headers: ${e.requestOptions.headers}');
+      
+      if (e.response != null) {
+        print('   - Response status code: ${e.response?.statusCode}');
+        print('   - Response data: ${e.response?.data}');
+        
+        // Response data ni batafsil print qilish
+        if (e.response?.data is Map) {
+          final responseData = e.response!.data as Map;
+          print('   - API Validation Errors:');
+          responseData.forEach((key, value) {
+            if (value is List) {
+              print('     • $key: ${value.join(", ")}');
+            } else {
+              print('     • $key: $value');
+            }
+          });
+        }
+        
+        print('   - Response headers: ${e.response?.headers}');
+      } else {
+        print('   - No response received');
+      }
+    }
+    
+    return null;
+  }
+}
+
+/// Yangi registratsiya qilgan foydalanuvchining accountini update qilish
+/// Bu faqat registratsiya vaqtida ishlaydi
+Future<void> _updateNewUserAccount(
+  BuildContext context,
+  Map<String, dynamic> requestBody,
+) async {
+  try {
+    // Yangi user ekanligini tekshirish
+    final prefs = await SharedPreferences.getInstance();
+    final isNewUser = prefs.getBool('first') ?? false;
+    
+    if (!isNewUser) {
+      // Eski user, update qilish shart emas
+      return;
+    }
+    
+    print('🔄 Updating account for new user...');
+    
+    final authStore = Provider.of<AuthStore>(context, listen: false);
+    final user = authStore.user;
+    
+    // Name ni update qilish (agar mavjud bo'lsa)
+    final name = requestBody['name']?.toString() ?? '';
+    if (name.isNotEmpty) {
+      final nameParts = name.trim().split(' ');
+      final firstName = nameParts.isNotEmpty ? nameParts.first : '';
+      final lastName = nameParts.length > 1 
+          ? nameParts.sublist(1).join(' ') 
+          : '';
+      
+      if (firstName.isNotEmpty || lastName.isNotEmpty) {
+        try {
+          await authStore.updateProfile(
+            firstName: firstName.isNotEmpty ? firstName : (user?.firstName ?? ''),
+            lastName: lastName.isNotEmpty ? lastName : (user?.lastName ?? ''),
+            onSuccess: () {
+              print('✅ User name updated successfully');
+            },
+          );
+        } catch (e) {
+          print('⚠️ Error updating user name: $e');
+        }
+      }
+    }
+    
+    // Goals va dream ni update qilish
+    final goals = requestBody['goals']?.toString() ?? '';
+    final dreamlife = requestBody['dreamlife']?.toString() ?? '';
+    
+    if (goals.isNotEmpty || dreamlife.isNotEmpty) {
+      try {
+        // Mavjud user ma'lumotlarini olish
+        final existingGender = user?.gender ?? 'male';
+        final existingAgeRange = user?.ageRange ?? '25-34';
+        final existingHappiness = user?.happiness ?? '';
+        
+        await authStore.updateUserDetail(
+          gender: existingGender,
+          ageRange: existingAgeRange,
+          dream: dreamlife.isNotEmpty ? dreamlife : (user?.dream ?? ''),
+          goals: goals.isNotEmpty ? goals : (user?.goals ?? ''),
+          happiness: existingHappiness,
+          onSuccess: () {
+            print('✅ User details updated successfully');
+          },
+        );
+      } catch (e) {
+        print('⚠️ Error updating user details: $e');
+      }
+    }
+    
+    // Update qilgandan keyin 'first' flag ni false qilib qo'yish
+    await prefs.setBool('first', false);
+    print('✅ Account update completed for new user');
+    
+  } catch (e) {
+    print('❌ Error updating new user account: $e');
+    // Xatolik bo'lsa ham davom etish kerak
+  }
 }

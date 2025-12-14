@@ -22,12 +22,13 @@ class HappinessCard extends StatelessWidget {
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Content - auto height
+          // Content - auto height, centered
           Text(
             content ??
                 'What makes you happy?',
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.9),
               fontSize: 12.sp,

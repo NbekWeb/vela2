@@ -26,6 +26,9 @@ class ApiService {
 
   // Get memory token for debugging
   static String? get memoryToken => _memoryToken;
+  
+  // Get base URL for debugging
+  static String get baseUrl => _dio.options.baseUrl;
 
   // Set token from memory (called by AuthStore)
   static void setMemoryToken(String? token) {
@@ -124,6 +127,13 @@ class ApiService {
     );
     
     try {
+      // Debug: to'liq URL ni print qilish
+      final fullUrl = '${_dio.options.baseUrl}$url';
+      print('🔄 [ApiService.request] Method: $method');
+      print('🔄 [ApiService.request] Base URL: ${_dio.options.baseUrl}');
+      print('🔄 [ApiService.request] Endpoint: $url');
+      print('🔄 [ApiService.request] Full URL: $fullUrl');
+      
       final response = await _dio.request<T>(
         url,
         data: data,
@@ -131,7 +141,7 @@ class ApiService {
         options: options,
       );
       
-      
+      print('✅ [ApiService.request] Response status: ${response.statusCode}');
       return response;
     } catch (e) {
       print('❌ API Error: $e');
@@ -154,36 +164,69 @@ class ApiService {
     Map<String, dynamic>? queryParameters,
     Map<String, dynamic>? headers,
   }) async {
+    print('🔄 [ApiService.uploadFile] Boshlanmoqda...');
+    print('🔄 [ApiService.uploadFile] URL: $url');
+    print('🔄 [ApiService.uploadFile] Method: $method');
+    print('🔄 [ApiService.uploadFile] Data keys: ${data?.keys.toList() ?? 'null'}');
+    
     final token = await _storage.read(key: 'access_token');
+    print('🔄 [ApiService.uploadFile] Token mavjud: ${token != null}');
+
+    // Dio FormData yuborganda Content-Type ni o'zi to'g'ri qo'shadi (multipart/form-data + boundary)
+    // Shuning uchun Content-Type ni manual qo'ymaymiz
+    final requestHeaders = <String, dynamic>{
+      ...headers ?? {},
+      if (token != null && !open) 'Authorization': 'Bearer $token',
+    };
 
     final options = Options(
       method: method,
-      headers: {
-        ...headers ?? {},
-        'Content-Type': 'multipart/form-data',
-        if (token != null && !open) 'Authorization': 'Bearer $token',
-      },
+      headers: requestHeaders,
     );
+    
+    print('🔄 [ApiService.uploadFile] Headers: $requestHeaders');
 
     // Convert data to FormData if it contains file paths
     dynamic formData;
     if (data != null) {
       formData = FormData();
+      print('🔄 [ApiService.uploadFile] FormData yaratilmoqda...');
 
+      int fileCount = 0;
+      int fieldCount = 0;
+      
       for (var entry in data.entries) {
         if (entry.value is Uint8List) {
-          // This is image bytes, add as file
+          // This is file bytes (image, audio, etc.), add as file
+          // Determine file extension based on key name
+          String filename = 'file';
+          String extension = 'bin';
+          
+          if (entry.key == 'file_wav' || entry.key == 'wav') {
+            filename = 'meditation.wav';
+            extension = 'wav';
+          } else if (entry.key == 'avatar' || entry.key == 'image') {
+            filename = 'avatar.jpg';
+            extension = 'jpg';
+          } else {
+            filename = '${entry.key}.$extension';
+          }
+          
+          print('🔄 [ApiService.uploadFile] File qo\'shilmoqda: $entry.key -> $filename (${(entry.value as Uint8List).length} bytes)');
+          
           formData.files.add(
             MapEntry(
-              'avatar', // Use 'avatar' as the field name for the API
-              MultipartFile.fromBytes(entry.value, filename: 'avatar.jpg'),
+              entry.key, // Use the key name from data
+              MultipartFile.fromBytes(entry.value, filename: filename),
             ),
           );
+          fileCount++;
         } else if (entry.value is String &&
             entry.value.toString().startsWith('/')) {
           // This is a file path, add as file
           final file = File(entry.value);
           if (await file.exists()) {
+            print('🔄 [ApiService.uploadFile] File path qo\'shilmoqda: $entry.key -> ${file.path}');
             formData.files.add(
               MapEntry(
                 entry.key,
@@ -193,6 +236,7 @@ class ApiService {
                 ),
               ),
             );
+            fileCount++;
           }
         } else if (entry.value is String &&
             entry.value.toString().startsWith('blob:')) {
@@ -215,23 +259,52 @@ class ApiService {
                   ),
                 ),
               );
+              fileCount++;
             }
           } catch (e) {
             // If blob conversion fails, send as field
             formData.fields.add(MapEntry(entry.key, entry.value.toString()));
+            fieldCount++;
           }
         } else {
           // This is regular data
-          formData.fields.add(MapEntry(entry.key, entry.value.toString()));
+          final key = entry.key;
+          final value = entry.value.toString();
+          print('🔄 [ApiService.uploadFile] Field qo\'shilmoqda: $key = $value');
+          formData.fields.add(MapEntry(key, value));
+          fieldCount++;
         }
       }
+      
+      print('✅ [ApiService.uploadFile] FormData tayyor: $fileCount file, $fieldCount field');
+      print('🔄 [ApiService.uploadFile] FormData fields: ${formData.fields.map((e) => '${e.key}=${e.value}').join(', ')}');
+      print('🔄 [ApiService.uploadFile] FormData files: ${formData.files.map((e) => '${e.key} (${e.value.filename})').join(', ')}');
+    } else {
+      print('⚠️ [ApiService.uploadFile] Data null, FormData yaratilmaydi');
+      formData = FormData(); // Bo'sh FormData yaratish
     }
 
-    return _dio.request<T>(
-      url,
-      data: formData,
-      queryParameters: queryParameters,
-      options: options,
-    );
+    print('🔄 [ApiService.uploadFile] Request yuborilmoqda...');
+    print('🔄 [ApiService.uploadFile] Full URL: ${_dio.options.baseUrl}$url');
+    print('🔄 [ApiService.uploadFile] FormData type: ${formData.runtimeType}');
+    
+    try {
+      final response = await _dio.request<T>(
+        url,
+        data: formData,
+        queryParameters: queryParameters,
+        options: options,
+      );
+      
+      print('✅ [ApiService.uploadFile] Response keldi: ${response.statusCode}');
+      return response;
+    } catch (e) {
+      print('❌ [ApiService.uploadFile] Xatolik: $e');
+      if (e is DioException) {
+        print('❌ [ApiService.uploadFile] DioException type: ${e.type}');
+        print('❌ [ApiService.uploadFile] Response: ${e.response?.data}');
+      }
+      rethrow;
+    }
   }
 }

@@ -27,6 +27,11 @@ class AuthStore extends ChangeNotifier {
     scopes: ['email', 'profile'],
     // iOS uchun soddalashtirilgan sozlamalar
     signInOption: SignInOption.standard,
+    // Android uchun serverClientId - Web application OAuth Client ID kerak
+    // Bu idToken olish uchun zarur
+    serverClientId: Platform.isAndroid 
+        ? '354237870385-vjm9880kbjje9gc9ptrisl30ih80qivk.apps.googleusercontent.com'
+        : null,
   );
   static final FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
@@ -114,7 +119,7 @@ class AuthStore extends ChangeNotifier {
 
   void setUser(UserModel? user) {
     _user = user;
-    
+
     // Register user with SuperwallKit for payment tracking
     if (user != null && user.id.isNotEmpty) {
       try {
@@ -127,7 +132,7 @@ class AuthStore extends ChangeNotifier {
         // Don't block user flow if SuperwallKit registration fails
       }
     }
-    
+
     notifyListeners();
   }
 
@@ -275,14 +280,20 @@ class AuthStore extends ChangeNotifier {
       GoogleSignInAuthentication? auth;
       try {
         auth = await googleUser.authentication;
+        developer.log('🔍 Google authentication obtained');
+        developer.log('🔍 ID Token: ${auth.idToken != null ? "Present" : "NULL"}');
+        developer.log('🔍 Access Token: ${auth.accessToken != null ? "Present" : "NULL"}');
       } catch (authError) {
         developer.log('❌ Auth error: $authError');
         setError('Failed to get authentication data. Please try again.');
         return;
       }
 
+      // Check if idToken is null and try to get it from Firebase if needed
+      String? idTokenToUse = auth.idToken;
+      
       // Firebase Authentication bilan sign-in qilish (faqat mobile platformalar uchun)
-      if (auth.idToken != null && !kIsWeb) {
+      if (idTokenToUse != null && !kIsWeb) {
         try {
           developer.log('🔍 Firebase Authentication bilan sign-in qilish...');
 
@@ -298,15 +309,29 @@ class AuthStore extends ChangeNotifier {
           final firebaseUser = userCredential.user;
 
           if (firebaseUser != null) {
-            // Firebase ID token'ni olish (Firebase'dan)
-            _lastIdToken = auth.idToken;
+            // Firebase ID token'ni olish (Firebase'dan) - bu backend uchun kerak
+            String? firebaseIdToken;
+            try {
+              firebaseIdToken = await firebaseUser.getIdToken();
+              developer.log('🔍 Firebase ID token obtained: ${firebaseIdToken != null ? "Present" : "NULL"}');
+            } catch (e) {
+              developer.log('❌ Error getting Firebase ID token: $e');
+            }
 
-            // Google ID token'ni olish (Firebase emas, Google'dan to'g'ridan-to'g'ri)
-            final googleIdToken = auth.idToken;
+            // Google ID token'ni olish (Google'dan to'g'ridan-to'g'ri)
+            final googleIdToken = auth.idToken ?? firebaseIdToken;
+            
+            if (googleIdToken == null) {
+              developer.log('❌ Both Google ID token and Firebase ID token are null');
+              setError('Failed to get authentication token. Please try again.');
+              return;
+            }
+
+            _lastIdToken = googleIdToken;
 
             // Firebase login API ga so'rov yuborish
             try {
-              print('🔍 Sending Google ID token to backend: ${googleIdToken}');
+              developer.log('🔍 Sending ID token to backend (length: ${googleIdToken.length})');
               final response = await ApiService.request(
                 url: 'auth/firebase/login/',
                 method: 'POST',
@@ -372,7 +397,24 @@ class AuthStore extends ChangeNotifier {
           setError('Firebase Authentication failed: $firebaseError');
         }
       } else {
-        setError('Google ID Token is null. Cannot authenticate.');
+        developer.log('❌ Google ID Token is null');
+        developer.log('🔍 Platform: ${Platform.isAndroid ? "Android" : "iOS"}');
+        developer.log('🔍 ID Token: ${auth.idToken}');
+        developer.log('🔍 Access Token: ${auth.accessToken != null ? "Present" : "NULL"}');
+        
+        // Try to get serverAuthCode as fallback (Android only)
+        if (Platform.isAndroid) {
+          try {
+            final serverAuthCode = await googleUser.serverAuthCode;
+            if (serverAuthCode != null) {
+              developer.log('🔍 Server Auth Code obtained, but backend expects ID token');
+            }
+          } catch (e) {
+            developer.log('❌ Error getting serverAuthCode: $e');
+          }
+        }
+        
+        setError('Google ID Token is null. Please check Google Sign-In configuration. Make sure serverClientId is set correctly.');
       }
     } catch (e) {
       String errorMessage = 'Google Sign-In failed. Please try again.';
@@ -907,6 +949,13 @@ class AuthStore extends ChangeNotifier {
     required String happiness,
     VoidCallback? onSuccess,
   }) async {
+    print('🔄 [updateUserDetail] Starting user detail update...');
+    print('🔄 [updateUserDetail] gender: $gender');
+    print('🔄 [updateUserDetail] ageRange: $ageRange');
+    print('🔄 [updateUserDetail] dream: $dream');
+    print('🔄 [updateUserDetail] goals: $goals');
+    print('🔄 [updateUserDetail] happiness: $happiness');
+
     setLoading(true);
     setError(null);
 
@@ -922,6 +971,9 @@ class AuthStore extends ChangeNotifier {
         'happiness': happiness,
       };
 
+      print('🔄 [updateUserDetail] Formatted age range: $formattedAgeRange');
+      print('🔄 [updateUserDetail] Request data: $requestData');
+
       // Ensure token is in API Service memory
       if (_accessToken != null) {
         ApiService.setMemoryToken(_accessToken);
@@ -929,15 +981,15 @@ class AuthStore extends ChangeNotifier {
 
       // Re-initialize API Service to ensure interceptors work
       ApiService.init();
-
+      final endpoint = 'auth/user-detail-update/';
       final response = await ApiService.request(
-        url: 'auth/user-detail-update/',
+        url: endpoint,
         method: 'PUT',
         data: requestData,
         open: false, // Token required
       );
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         // Update local user data
         if (_user != null) {
           final updatedUser = _user!.copyWith(
@@ -962,18 +1014,37 @@ class AuthStore extends ChangeNotifier {
         onSuccess?.call();
       }
     } catch (e) {
+      print('❌ [updateUserDetail] API Error: $e');
+
+      // Response ma'lumotlarini olish (agar mavjud bo'lsa)
+      if (e.toString().contains('404')) {
+        print(
+          '❌ [updateUserDetail] 404 Error - Endpoint topilmadi: auth/user-detail-update/',
+        );
+        print('❌ [updateUserDetail] Base URL: ${ApiService.baseUrl}');
+        print(
+          '❌ [updateUserDetail] Full URL: ${ApiService.baseUrl}auth/user-detail-update/',
+        );
+        print(
+          '❌ [updateUserDetail] Expected: http://31.97.98.47:9000/api/auth/user-detail-update/',
+        );
+      }
+
       developer.log('❌ Update user detail error: $e');
 
       setError('Failed to update user details');
 
-      // Show error toast
-      Fluttertoast.showToast(
-        msg: e.toString(),
-        toastLength: Toast.LENGTH_LONG,
-        gravity: ToastGravity.TOP,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-      );
+      // Show error toast - faqat parallel yuborishda emas
+      // Parallel yuborishda toast ko'rsatmaymiz, chunki bu background process
+      if (onSuccess == null) {
+        Fluttertoast.showToast(
+          msg: 'Failed to update user details',
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.TOP,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -987,6 +1058,11 @@ class AuthStore extends ChangeNotifier {
     Uint8List? avatarBytes,
     VoidCallback? onSuccess,
   }) async {
+    print('🔄 [updateProfile] Starting profile update...');
+    print('🔄 [updateProfile] firstName: $firstName');
+    print('🔄 [updateProfile] lastName: $lastName');
+    print('🔄 [updateProfile] avatar: $avatar');
+
     setLoading(true);
     setError(null);
 
@@ -1008,15 +1084,23 @@ class AuthStore extends ChangeNotifier {
           data['avatar'] = avatar;
         }
 
-        final response = await ApiService.uploadFile(
+        print(
+          '🔄 [updateProfile] Sending PUT request to auth/user-detail/ (with file upload)',
+        );
+        print('🔄 [updateProfile] Request data: $data');
+        final uploadResponse = await ApiService.uploadFile(
           url: 'auth/user-detail/',
           method: 'PUT',
           data: data,
         );
+        print(
+          '✅ [updateProfile] Response status: ${uploadResponse.statusCode}',
+        );
+        print('✅ [updateProfile] Response data: ${uploadResponse.data}');
 
         // Update local user data with the response
-        if (_user != null && response.data != null) {
-          final userData = response.data;
+        if (_user != null && uploadResponse.data != null) {
+          final userData = uploadResponse.data;
           if (userData is Map<String, dynamic>) {
             final updatedUser = UserModel.fromJson(userData);
             setUser(updatedUser);
@@ -1038,11 +1122,17 @@ class AuthStore extends ChangeNotifier {
           'avatar': avatar?.isEmpty == true ? null : avatar,
         };
 
-        await ApiService.request(
+        print('🔄 [updateProfile] Sending PUT request to auth/user-detail/');
+        print('🔄 [updateProfile] Request data: $data');
+        final requestResponse = await ApiService.request(
           url: 'auth/user-detail/',
           method: 'PUT',
           data: data,
         );
+        print(
+          '✅ [updateProfile] Response status: ${requestResponse.statusCode}',
+        );
+        print('✅ [updateProfile] Response data: ${requestResponse.data}');
 
         // Update local user data
         if (_user != null) {
