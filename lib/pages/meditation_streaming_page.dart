@@ -246,6 +246,28 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
       _mode = AudioMode.generating;
     });
 
+    // Birinchi meditatsiya generatsiya qilinganda ritualType, voice, duration ni localStorage'da saqlash
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isFirst = prefs.getBool('first') ?? false;
+      
+      if (isFirst) {
+        final meditationStore = Provider.of<MeditationStore>(context, listen: false);
+        final ritualType = meditationStore.storedRitualType ?? meditationStore.storedRitualId ?? '1';
+        final voice = meditationStore.storedVoice ?? 'female';
+        final duration = meditationStore.storedDuration ?? '2';
+        
+        // Initial ma'lumotlarni saqlash
+        await prefs.setString('initial_ritual_type', ritualType);
+        await prefs.setString('initial_voice', voice);
+        await prefs.setString('initial_duration', duration);
+        
+        print('✅ [First Meditation] Saved initial settings: ritualType=$ritualType, voice=$voice, duration=$duration');
+      }
+    } catch (e) {
+      print('⚠️ [First Meditation] Error saving initial settings: $e');
+    }
+
     // Agar registratsiya vaqtida bo'lsa, account update ni parallel ravishda yuborish
     _updateNewUserAccountInParallel();
 
@@ -531,8 +553,9 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
     try {
       print('🔄 [Transition] Getting meditation by ID: $meditationId');
       final response = await ApiService.request(
-        url: 'meditation/$meditationId/',
+        url: 'auth/meditation/$meditationId/',
         method: 'GET',
+        open: false, // Token required
       );
       
       // Response format: { "file": "http://...", "file_wav": "http://..." }
@@ -893,6 +916,7 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
               dream: dreamlife.isNotEmpty ? dreamlife : (user?.dream ?? ''),
               goals: goals.isNotEmpty ? goals : (user?.goals ?? ''),
               happiness: existingHappiness,
+              showToast: false, // Registratsiya paytidagi meditatsiya generatsiya qilishda toast ko'rsatmaslik
               onSuccess: () {
                 print('✅ User details updated successfully (parallel)');
               },

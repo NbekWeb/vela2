@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../shared/widgets/stars_animation.dart';
 import '../shared/widgets/full_width_track_shape.dart';
 import '../core/stores/check_in_store.dart';
+import '../core/stores/auth_store.dart';
+import '../core/stores/meditation_store.dart';
 import 'dashboard/main.dart';
-import 'generator/direct_ritual_page.dart';
+import 'meditation_streaming_page.dart';
 
 class DailyCheckInPage extends StatelessWidget {
   const DailyCheckInPage({super.key});
@@ -22,7 +25,7 @@ class DailyCheckInPage extends StatelessWidget {
               children: const [
                 _CheckInAppBar(),
                 SizedBox(height: 16),
-                Expanded(child: _CheckInForm()),
+                _CheckInForm(),
               ],
             ),
           ),
@@ -99,6 +102,23 @@ class _CheckInForm extends StatefulWidget {
 class _CheckInFormState extends State<_CheckInForm> {
   double _sliderValue = 0.5; // Default neutral position
   final TextEditingController _descriptionController = TextEditingController();
+  bool _isGenerateButtonEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Text controller'ga listener qo'shish - text o'zgarganda setState qilish
+    _descriptionController.addListener(() {
+      final hasText = _descriptionController.text.trim().isNotEmpty;
+      print('🔄 [Check-In] Text changed: "${_descriptionController.text}", hasText: $hasText, current enabled: $_isGenerateButtonEnabled');
+      if (hasText != _isGenerateButtonEnabled) {
+        print('✅ [Check-In] Updating button state: $_isGenerateButtonEnabled -> $hasText');
+        setState(() {
+          _isGenerateButtonEnabled = hasText;
+        });
+      }
+    });
+  }
 
   String _getMoodText(double value) {
     if (value <= 0.20) {
@@ -111,16 +131,6 @@ class _CheckInFormState extends State<_CheckInForm> {
       return 'Good';
     } else {
       return 'Excellent';
-    }
-  }
-
-  String _getCheckInChoice(double value) {
-    if (value <= 0.40) {
-      return 'struggling';
-    } else if (value <= 0.80) {
-      return 'neutral';
-    } else {
-      return 'excellent';
     }
   }
 
@@ -327,6 +337,7 @@ class _CheckInFormState extends State<_CheckInForm> {
                     _CheckInButtons(
                       descriptionController: _descriptionController,
                       sliderValue: _sliderValue,
+                      isGenerateButtonEnabled: _isGenerateButtonEnabled,
                     ),
                   ],
                 ),
@@ -363,23 +374,20 @@ class _CheckInFormState extends State<_CheckInForm> {
   }
 }
 
-class _CheckInButtons extends StatefulWidget {
+class _CheckInButtons extends StatelessWidget {
   final TextEditingController descriptionController;
   final double sliderValue;
+  final bool isGenerateButtonEnabled;
 
   const _CheckInButtons({
     required this.descriptionController,
     required this.sliderValue,
+    required this.isGenerateButtonEnabled,
   });
 
-  @override
-  State<_CheckInButtons> createState() => _CheckInButtonsState();
-}
-
-class _CheckInButtonsState extends State<_CheckInButtons> {
   void _handleCheckIn(BuildContext context, CheckInStore checkInStore) {
-    final checkInChoice = _getCheckInChoice(widget.sliderValue);
-    final description = widget.descriptionController.text.trim();
+    final checkInChoice = _getCheckInChoice(sliderValue);
+    final description = descriptionController.text.trim();
 
     // if (description.isEmpty) {
     //   Fluttertoast.showToast(
@@ -392,15 +400,105 @@ class _CheckInButtonsState extends State<_CheckInButtons> {
     //   return;
     // }
 
+    final authStore = Provider.of<AuthStore>(context, listen: false);
+
     checkInStore.submitCheckIn(
       checkInChoice: checkInChoice,
       description: description,
+      authStore: authStore,
       onSuccess: () {
+        // localStorage'dan initial ma'lumotlarni tozalash
+        _clearInitialSettings(context);
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const DashboardMainPage()),
         );
       },
     );
+  }
+
+  // localStorage'dan initial ma'lumotlarni tozalash
+  Future<void> _clearInitialSettings(BuildContext context) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('initial_ritual_type');
+      await prefs.remove('initial_voice');
+      await prefs.remove('initial_duration');
+      print('✅ [Check-In] Cleared initial settings from localStorage');
+    } catch (e) {
+      print('⚠️ [Check-In] Error clearing initial settings: $e');
+    }
+  }
+
+  // Generate New Meditation tugmasi bosilganda
+  Future<void> _handleGenerateNewMeditation(BuildContext context, CheckInStore checkInStore) async {
+    final checkInChoice = _getCheckInChoice(sliderValue);
+    final description = descriptionController.text.trim();
+
+    if (description.isEmpty) {
+      Fluttertoast.showToast(
+        msg: 'Please enter a description',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: const Color(0xFFF2EFEA),
+        textColor: const Color(0xFF3B6EAA),
+      );
+      return;
+    }
+
+    // Check-in POST API
+    final authStore = Provider.of<AuthStore>(context, listen: false);
+    
+    try {
+      // Check-in yuborish
+      await checkInStore.submitCheckIn(
+        checkInChoice: checkInChoice,
+        description: description,
+        authStore: authStore,
+        onSuccess: () {
+          print('✅ [Generate New Meditation] Check-in submitted successfully');
+        },
+      );
+
+      // localStorage'dan initial ma'lumotlarni olish
+      final prefs = await SharedPreferences.getInstance();
+      final initialRitualType = prefs.getString('initial_ritual_type') ?? '1';
+      final initialVoice = prefs.getString('initial_voice') ?? 'female';
+      final initialDuration = prefs.getString('initial_duration') ?? '2';
+
+      print('🔄 [Generate New Meditation] Using initial settings:');
+      print('   - ritualType: $initialRitualType');
+      print('   - voice: $initialVoice');
+      print('   - duration: $initialDuration');
+
+      // MeditationStore'ga saqlash
+      final meditationStore = Provider.of<MeditationStore>(context, listen: false);
+      await meditationStore.saveRitualSettings(
+        ritualType: initialRitualType,
+        tone: 'dreamy', // Default tone
+        duration: initialDuration,
+        planType: int.tryParse(initialRitualType) ?? 1,
+        voice: initialVoice,
+      );
+
+      // localStorage'dan tozalash
+      await _clearInitialSettings(context);
+
+      // MeditationStreamingPage ga o'tish
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const MeditationStreamingPage(),
+        ),
+      );
+    } catch (e) {
+      print('❌ [Generate New Meditation] Error: $e');
+      Fluttertoast.showToast(
+        msg: 'Error generating meditation. Please try again.',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
   }
 
   String _getCheckInChoice(double value) {
@@ -459,15 +557,15 @@ class _CheckInButtonsState extends State<_CheckInButtons> {
               width: double.infinity,
               height: 56,
               child: OutlinedButton(
-                onPressed: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (context) => const DirectRitualPage(),
-                    ),
-                  );
-                },
+                onPressed: (isGenerateButtonEnabled && !checkInStore.isLoading)
+                    ? () {
+                        _handleGenerateNewMeditation(context, checkInStore);
+                      }
+                    : null,
                 style: OutlinedButton.styleFrom(
-                  backgroundColor: Colors.white,
+                  backgroundColor: isGenerateButtonEnabled
+                      ? Colors.white
+                      : Colors.white.withOpacity(0.5),
                   side: BorderSide.none,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(32),
@@ -475,18 +573,25 @@ class _CheckInButtonsState extends State<_CheckInButtons> {
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
+                  children: [
                     Text(
-                      'Generate New Meditation',
+                      'Generate New Meditation ',
                       style: TextStyle(
-                        color: Color(0xFF3B6EAA),
+                        color: isGenerateButtonEnabled
+                            ? const Color(0xFF3B6EAA)
+                            : const Color(0xFF3B6EAA).withOpacity(0.5),
                         fontSize: 16,
                         fontFamily: 'Satoshi',
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    SizedBox(width: 8),
-                    Icon(Icons.auto_awesome, color: Color(0xFF3B6EAA)),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.auto_awesome,
+                      color: isGenerateButtonEnabled
+                          ? const Color(0xFF3B6EAA)
+                          : const Color(0xFF3B6EAA).withOpacity(0.5),
+                    ),
                   ],
                 ),
               ),

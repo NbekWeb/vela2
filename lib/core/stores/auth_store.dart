@@ -920,6 +920,21 @@ class AuthStore extends ChangeNotifier {
 
   // Helper method to format age range to required format
   String _formatAgeRange(String ageRange) {
+    // Agar ageRange allaqachon "XX-XX" formatida bo'lsa, uni to'g'ridan-to'g'ri qaytarish
+    if (ageRange.contains('-')) {
+      // "25-34" formatidagi string'ni tekshirish
+      final parts = ageRange.split('-');
+      if (parts.length == 2) {
+        final start = int.tryParse(parts[0].trim());
+        final end = int.tryParse(parts[1].trim());
+        if (start != null && end != null) {
+          // To'g'ri formatda bo'lsa, qaytarish
+          return ageRange;
+        }
+      }
+    }
+    
+    // Agar bitta raqam bo'lsa (masalan "25"), uni formatga o'girish
     try {
       int age = int.parse(ageRange);
 
@@ -948,6 +963,7 @@ class AuthStore extends ChangeNotifier {
     required String goals,
     required String happiness,
     VoidCallback? onSuccess,
+    bool showToast = true, // Default true, registratsiya paytida false qilish mumkin
   }) async {
     print('🔄 [updateUserDetail] Starting user detail update...');
     print('🔄 [updateUserDetail] gender: $gender');
@@ -1019,14 +1035,16 @@ class AuthStore extends ChangeNotifier {
           setUser(updatedUser);
         }
 
-        // Show success toast
-        Fluttertoast.showToast(
-          msg: 'User details updated successfully!',
-          toastLength: Toast.LENGTH_LONG,
-          gravity: ToastGravity.TOP,
-          backgroundColor: Colors.green,
-          textColor: Colors.white,
-        );
+        // Show success toast (faqat showToast true bo'lsa)
+        if (showToast) {
+          Fluttertoast.showToast(
+            msg: 'User details updated successfully!',
+            toastLength: Toast.LENGTH_LONG,
+            gravity: ToastGravity.TOP,
+            backgroundColor: Colors.green,
+            textColor: Colors.white,
+          );
+        }
 
         onSuccess?.call();
       }
