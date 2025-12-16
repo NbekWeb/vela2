@@ -65,7 +65,7 @@ String capitalizeVoice(String value) {
 }
 
 /// Build request body from user data
-Map<String, dynamic> buildRequestBody(BuildContext? context) {
+Future<Map<String, dynamic>> buildRequestBody(BuildContext? context) async {
   // Default values
   String name = "User";
   String goals = "";
@@ -155,15 +155,41 @@ Map<String, dynamic> buildRequestBody(BuildContext? context) {
           length = int.tryParse(durationStr) ?? 2;
         }
 
-        // Get check_in - oxirgi check-in dan description yoki checkInChoice olish
-        if (user != null && user.checkIns.isNotEmpty) {
-          final lastCheckIn = user.checkIns.last;
-          // Avval description ni tekshirish, bo'sh bo'lsa checkInChoice ni olish
-          checkIn = lastCheckIn.description.isNotEmpty
-              ? lastCheckIn.description
-              : lastCheckIn.checkInChoice.isNotEmpty
-                  ? lastCheckIn.checkInChoice
-                  : "string";
+        // Get check_in - API dan auth/check-in/ endpoint orqali birinchi elementning description ni olish
+        try {
+          final checkInResponse = await ApiService.request(
+            url: 'auth/check-in/',
+            method: 'GET',
+            open: false, // Token required
+          );
+          
+          // Response array bo'lishi kerak - array?.[0] sintaksisini ishlatish
+          final checkInList = checkInResponse.data;
+          if (checkInList is List && checkInList.isNotEmpty) {
+            final firstCheckIn = checkInList[0];
+            
+            // description ni olish
+            if (firstCheckIn is Map<String, dynamic>) {
+              final description = firstCheckIn['description']?.toString();
+              if (description != null && description.isNotEmpty && description != 'string') {
+                checkIn = description;
+                print('✅ [buildRequestBody] Check-in description from API: $checkIn');
+              }
+            }
+          }
+        } catch (e) {
+          print('⚠️ [buildRequestBody] Error fetching check-in from API: $e');
+          // Fallback: user.checkIns dan olish
+          if (user != null && user.checkIns.isNotEmpty) {
+            final lastCheckIn = user.checkIns.last;
+            // Avval description ni tekshirish, bo'sh bo'lsa checkInChoice ni olish
+            checkIn = lastCheckIn.description.isNotEmpty
+                ? lastCheckIn.description
+                : lastCheckIn.checkInChoice.isNotEmpty
+                    ? lastCheckIn.checkInChoice
+                    : "string";
+            print('✅ [buildRequestBody] Using check-in from user.checkIns: $checkIn');
+          }
         }
         
       } catch (providerError) {
@@ -286,7 +312,7 @@ Future<Map<String, dynamic>?> createMeditationWithFile({
 }) async {
   try {
     // Ma'lumotlarni olish
-    final requestBody = buildRequestBody(context);
+    final requestBody = await buildRequestBody(context);
     
     // Plan type ni olish
     final meditationStore = Provider.of<MeditationStore>(context, listen: false);

@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'package:just_audio/just_audio.dart';
 import '../shared/widgets/wave_visualization.dart';
 import '../shared/widgets/stars_animation.dart';
 import '../core/services/meditation_streaming_service.dart';
 import '../core/services/audio_player_service.dart';
 import '../core/services/pcm_stream_player.dart' show PcmStreamPlayer;
+import '../core/services/api_service.dart';
 import '../core/services/meditation_action_service.dart';
 import 'components/sleep_meditation_header.dart';
 import 'package:provider/provider.dart';
@@ -68,6 +70,7 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
   // Stream subscriptions
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<Duration?>? _durationSubscription;
+  StreamSubscription<PlayerState>? _playerStateSubscription;
 
   @override
   void initState() {
@@ -130,6 +133,15 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
       if (_mode == AudioMode.filePlaying || _mode == AudioMode.filePaused) {
         setState(() {
           _position = position;
+          
+          // Audio tugaganda (position duration ga yetganda) mode ni filePaused ga o'zgartirish
+          if (_mode == AudioMode.filePlaying && 
+              _duration.inMilliseconds > 0 && 
+              position >= _duration) {
+            print('✅ [Position Stream] Audio completed (position >= duration), switching to paused mode');
+            _mode = AudioMode.filePaused;
+            _position = _duration; // Position ni duration ga tenglashtirish
+          }
         });
       }
     });
@@ -137,11 +149,34 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
     // Duration stream
     _durationSubscription = _audioService.durationStream.listen((duration) {
       if (mounted && duration != null) {
+        print('🔄 [Duration Stream] Duration updated: ${duration.inSeconds}s');
         setState(() {
           _duration = duration;
         });
       }
     });
+
+    // Player state stream - audio tugaganda mode ni filePaused ga o'zgartirish
+    _playerStateSubscription = _audioService.playerStateStream.listen((playerState) {
+      if (!mounted) return;
+      
+      // Audio tugaganda (completed state) yoki position duration ga yetganda
+      if (playerState.processingState == ProcessingState.completed) {
+        if (_mode == AudioMode.filePlaying) {
+          print('✅ [Player State] Audio completed, switching to paused mode');
+          setState(() {
+            _mode = AudioMode.filePaused;
+            // Position ni duration ga tenglashtirish
+            if (_duration.inMilliseconds > 0) {
+              _position = _duration;
+            }
+          });
+        }
+      }
+    });
+
+    // Position stream'da ham tekshirish - position duration ga yetganda
+    // Bu position stream listener'da qo'shilgan, lekin yana bir marta tekshirish kerak
   }
 
   @override
@@ -159,6 +194,7 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
     // Cancel stream subscriptions
     _positionSubscription?.cancel();
     _durationSubscription?.cancel();
+    _playerStateSubscription?.cancel();
     
     // 🔴 CRITICAL: Sync dispose (await yo'q)
     // Stop PCM player - sync (fire and forget)
@@ -252,16 +288,17 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
               wavBytes: wavBytes,
             );
 
+            String? meditationId;
             if (result != null) {
               print('✅ Meditation created successfully: $result');
               // Meditation ID ni olish va saqlash
-              final meditationId = result['meditation_id']?.toString() ?? 
-                                  result['id']?.toString();
+              meditationId = result['meditation_id']?.toString() ?? 
+                            result['id']?.toString();
               if (meditationId != null && mounted) {
                 final likeStore = context.read<LikeStore>();
                 setState(() {
                   _meditationId = meditationId;
-                  _isLiked = likeStore.isLiked(meditationId);
+                  _isLiked = likeStore.isLiked(meditationId!);
                 });
                 print('✅ Meditation ID saved: $_meditationId');
                 print('✅ Like status: $_isLiked');
@@ -271,16 +308,68 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
               // Meditation yaratish API dan xato keldi, lekin dashboardga o'tkazmaymiz
               // Faqat generatsiya API xatolarida dashboardga o'tkaziladi
             }
+            
+            // 🔴 CRITICAL: PCM streaming to'liq tugaguncha kutish
+            // File backendga yuborilgandan keyin, getMeditationByID qilib link olish
+            // Transition ni setState dan TASHQARIDA chaqirish (async)
+            // PCM streaming to'liq tugaguncha kutish, keyin just_audio ga o'tish
+            if (meditationId != null && _mode == AudioMode.pcmStreaming && mounted) {
+              print('🔄 [onComplete] Waiting for PCM streaming to finish...');
+              
+              // PCM streaming tugaguncha kutish - position duration ga yetguncha kutamiz
+              // Yoki PCM player to'xtaguncha kutamiz
+              Future<void> waitForPcmToFinish() async {
+                if (_pcmStreamPlayer == null) {
+                  print('⚠️ [onComplete] PCM player is null, skipping wait');
+                  return;
+                }
+                
+                print('🔄 [onComplete] Waiting for PCM to finish...');
+                
+                // PCM streaming tugaguncha kutish - position duration ga yetguncha
+                // Yoki timeout (maksimum 5 daqiqa)
+                final timeout = DateTime.now().add(const Duration(minutes: 5));
+                while (_mode == AudioMode.pcmStreaming && 
+                       _pcmStreamPlayer != null && 
+                       mounted &&
+                       DateTime.now().isBefore(timeout)) {
+                  
+                  // Position va duration ni tekshirish
+                  final currentPosition = _pcmPosition;
+                  final currentDuration = _duration;
+                  
+                  // Agar duration mavjud bo'lsa va position duration ga yetgan bo'lsa
+                  if (currentDuration.inMilliseconds > 0 && 
+                      currentPosition >= currentDuration) {
+                    print('✅ [onComplete] PCM position reached duration: ${currentPosition.inSeconds}s >= ${currentDuration.inSeconds}s');
+                    break;
+                  }
+                  
+                  // Yoki PCM player to'xtagan bo'lsa
+                  if (_pcmStreamPlayer != null && !_pcmStreamPlayer!.isPlaying) {
+                    print('✅ [onComplete] PCM player stopped playing');
+                    break;
+                  }
+                  
+                  await Future.delayed(const Duration(milliseconds: 100));
+                }
+                
+                print('✅ [onComplete] PCM streaming finished, starting transition...');
+              }
+              
+              // setState dan tashqarida async chaqirish
+              waitForPcmToFinish().then((_) {
+                if (meditationId != null && _mode == AudioMode.pcmStreaming && mounted) {
+                  print('🔄 [onComplete] Starting transition to just_audio (meditationId: $meditationId)...');
+                  _transitionToFileFromApi(meditationId!);
+                }
+              });
+            }
           } catch (e, stackTrace) {
             print('❌ Error creating meditation: $e');
             print('Stack trace: $stackTrace');
             // Meditation yaratish API da xatolik bo'lsa, lekin dashboardga o'tkazmaymiz
             // Faqat generatsiya API xatolarida dashboardga o'tkaziladi
-          }
-
-          // PCM → FILE transition
-          if (_streamingService.tempAudioFile != null && _mode == AudioMode.pcmStreaming) {
-            await _transitionToFile(_streamingService.tempAudioFile!);
           }
         }
       },
@@ -412,13 +501,13 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
     }
   }
 
-  /// PCM → FILE transition (TOZA VA SODDA)
-  Future<void> _transitionToFile(File audioFile) async {
-    print('🔄 [Transition] PCM → FILE starting...');
+  /// PCM → FILE transition from API link (YANGI)
+  Future<void> _transitionToFileFromApi(String meditationId) async {
+    print('🔄 [Transition] PCM → FILE from API starting...');
     
     // 🔴 CRITICAL: Save position and playing state BEFORE changing mode
     final wasPcm = _mode == AudioMode.pcmStreaming;
-    final wasPlaying = wasPcm && _playbackStartTime != null; // PCM playing bo'lsa
+    final wasPlaying = wasPcm && _playbackStartTime != null;
     final savedPosition = wasPcm ? _pcmPosition : _position;
     print('🔄 [Transition] Saved position: ${savedPosition.inSeconds}s (wasPcm: $wasPcm, wasPlaying: $wasPlaying)');
     
@@ -437,29 +526,95 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
     // 2. STOP just_audio (safety)
     await _audioService.stop();
     
-    // 3. LOAD FILE
-    await _audioService.playFromFile(
-      audioFile.path,
-      initialPosition: savedPosition,
-    );
+    // 3. GET MEDITATION BY ID - API dan link olish
+    String? audioUrl;
+    try {
+      print('🔄 [Transition] Getting meditation by ID: $meditationId');
+      final response = await ApiService.request(
+        url: 'meditation/$meditationId/',
+        method: 'GET',
+      );
+      
+      // Response format: { "file": "http://...", "file_wav": "http://..." }
+      // Yoki { "details": { ... }, "file": "http://..." }
+      final responseData = response.data;
+      final fileUrl = responseData is Map 
+          ? (responseData['file'] ?? 
+             responseData['file_wav'] ??
+             responseData['details']?['file'])
+          : null;
+      
+      if (fileUrl != null && fileUrl is String) {
+        audioUrl = fileUrl;
+        print('✅ [Transition] Got audio URL: $audioUrl');
+      } else {
+        print('⚠️ [Transition] No file URL in response: $responseData');
+        // Fallback to local file if available
+        if (_streamingService.tempAudioFile != null) {
+          audioUrl = _streamingService.tempAudioFile!.path;
+          print('✅ [Transition] Using local file as fallback');
+        }
+      }
+    } catch (e) {
+      print('❌ [Transition] Error getting meditation: $e');
+      // Fallback to local file if available
+      if (_streamingService.tempAudioFile != null) {
+        audioUrl = _streamingService.tempAudioFile!.path;
+        print('✅ [Transition] Using local file as fallback after error');
+      }
+    }
+    
+    if (audioUrl == null) {
+      print('❌ [Transition] No audio URL available, cannot transition');
+      if (mounted) {
+        setState(() {
+          _mode = AudioMode.pcmStreaming; // Revert to PCM mode
+        });
+      }
+      return;
+    }
+    
+    // 4. LOAD FILE from URL or local path
+    // playFromFile URL va file path ikkalasini ham qo'llab-quvvatlaydi
+    try {
+      await _audioService.playFromFile(
+        audioUrl,
+        initialPosition: savedPosition,
+      );
+      print('✅ [Transition] Loaded audio: $audioUrl');
+    } catch (e) {
+      print('❌ [Transition] Error loading audio: $e');
+      if (mounted) {
+        setState(() {
+          _mode = AudioMode.pcmStreaming; // Revert to PCM mode
+        });
+      }
+      return;
+    }
     
     // 🔴 CRITICAL: Duration file'dan kelishini kutamiz (waveform timing uchun)
     try {
-      await _audioService.durationStream
-          .where((d) => d != null)
+      final duration = await _audioService.durationStream
+          .where((d) => d != null && d!.inMilliseconds > 0)
           .first
           .timeout(
-            const Duration(seconds: 2),
+            const Duration(seconds: 5),
             onTimeout: () {
               print('⚠️ [Transition] Duration timeout, continuing anyway');
               return null;
             },
           );
+      if (duration != null && mounted) {
+        setState(() {
+          _duration = duration;
+        });
+        print('✅ [Transition] Duration set: ${duration.inSeconds}s');
+      }
     } catch (e) {
       print('⚠️ [Transition] Error waiting for duration: $e');
     }
     
-    // 4. Agar PCM playing bo'lsa, file ham playing bo'lishi kerak
+    // 5. Agar PCM playing bo'lsa, file ham playing bo'lishi kerak
     if (wasPlaying) {
       // Resume playing
       await _audioService.play();
@@ -487,6 +642,8 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
 
   /// Toggle play/pause (SODDA VA TO'G'RI)
   Future<void> _togglePlayPause() async {
+    print('🔄 [Play/Pause] Toggle called - mode: $_mode, duration: ${_duration.inSeconds}s');
+    
     // Block during transition or PCM streaming
     if (_mode == AudioMode.transitioning || _mode == AudioMode.pcmStreaming) {
       print('⚠️ [Play/Pause] Disabled in mode: $_mode');
@@ -509,6 +666,8 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
         });
       }
       print('✅ [Play/Pause] Playing');
+    } else {
+      print('⚠️ [Play/Pause] Invalid mode for toggle: $_mode');
     }
   }
 
@@ -542,7 +701,10 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
 
   /// Seek to position (FAqat FILE MODE)
   Future<void> _handleSeek(double tapX, double width) async {
+    print('🔄 [Seek] Called - mode: $_mode, duration: ${_duration.inSeconds}s, tapX: $tapX, width: $width');
+    
     if (_duration.inMilliseconds <= 0) {
+      print('⚠️ [Seek] Duration is zero, cannot seek');
       return;
     }
 
@@ -557,7 +719,7 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
       milliseconds: (_duration.inMilliseconds * progress).round(),
     );
     
-    print('⏩ [Seek] Seeking to ${seekPosition.inSeconds}s...');
+    print('⏩ [Seek] Seeking to ${seekPosition.inSeconds}s (progress: ${(progress * 100).toStringAsFixed(1)}%)...');
     
     try {
       await _audioService.seek(seekPosition);
@@ -659,7 +821,7 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
       print('🔄 [_updateNewUserAccountInParallel] Ba\'zi ma\'lumotlar yo\'q, PUT so\'rovlarini yuborish...');
 
       // Ma'lumotlarni olish
-      final requestBody = buildRequestBody(context);
+      final requestBody = await buildRequestBody(context);
       print('🔄 [_updateNewUserAccountInParallel] Request body: $requestBody');
 
       // Parallel ravishda yuborish - await qilmaymiz
@@ -787,9 +949,11 @@ class _MeditationStreamingPageState extends State<MeditationStreamingPage> {
     final profileData = meditationStore.meditationProfile;
 
     // Check if audio is fully loaded
+    // 🔴 CRITICAL: isAudioReady faqat mode va duration ga qarab aniqlanadi
+    // _wavBytes PCM streaming uchun, file mode da kerak emas
     final isAudioReady = (_mode == AudioMode.filePlaying || 
                           _mode == AudioMode.filePaused) && 
-                         _wavBytes != null;
+                         _duration.inMilliseconds > 0;
 
     // Get duration from audio file (rounded to minutes)
     // Agar audio hali yuklanmagan bo'lsa, default qiymat

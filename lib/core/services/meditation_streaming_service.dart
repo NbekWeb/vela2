@@ -66,7 +66,7 @@ class MeditationStreamingService {
       }
 
       final endpoint = getEndpoint(ritualType);
-      final requestBody = buildRequestBody(context);
+      final requestBody = await buildRequestBody(context);
 
       final request = http.Request('POST', Uri.parse(endpoint));
 

@@ -985,12 +985,23 @@ class AuthStore extends ChangeNotifier {
       // Django requires trailing slash for PUT requests with APPEND_SLASH enabled
       String endpoint = 'auth/user-detail-update/';
       
+      // 🔴 CRITICAL: Agar user ma'lumotlari bo'lmasa (yangi user), POST yuborish kerak
+      // User detail mavjudligini tekshirish - gender, ageRange, dream, goals, happiness
+      final hasUserDetails = _user != null &&
+          (_user!.gender != null && _user!.gender!.isNotEmpty) &&
+          (_user!.ageRange != null && _user!.ageRange!.isNotEmpty);
+      
+      // Method ni aniqlash: agar user detail bo'lmasa POST, aks holda PUT
+      final method = hasUserDetails ? 'PUT' : 'POST';
+      
+      print('🔄 [updateUserDetail] User has details: $hasUserDetails');
+      print('🔄 [updateUserDetail] Using method: $method');
       print('🔄 [updateUserDetail] Trying endpoint: $endpoint');
       print('🔄 [updateUserDetail] Full URL will be: ${ApiService.baseUrl}$endpoint');
       
       final response = await ApiService.request(
         url: endpoint,
-        method: 'PUT',
+        method: method,
         data: requestData,
         open: false, // Token required
       );

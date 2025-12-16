@@ -12,10 +12,21 @@ class AudioPlayerService {
   /// Duration stream
   Stream<Duration?> get durationStream => _player.durationStream;
 
-  /// Play audio from file (SODDA)
-  Future<void> playFromFile(String filePath, {Duration? initialPosition}) async {
+  /// Player state stream (for detecting completion)
+  Stream<PlayerState> get playerStateStream => _player.playerStateStream;
+
+  /// Play audio from file or URL (SODDA)
+  Future<void> playFromFile(String filePathOrUrl, {Duration? initialPosition}) async {
     await _player.stop();
-    await _player.setFilePath(filePath);
+    
+    // URL yoki file path ni aniqlash
+    if (filePathOrUrl.startsWith('http://') || filePathOrUrl.startsWith('https://')) {
+      // URL - setUrl ishlatish
+      await _player.setUrl(filePathOrUrl);
+    } else {
+      // Local file path - setFilePath ishlatish
+      await _player.setFilePath(filePathOrUrl);
+    }
     
     if (initialPosition != null && initialPosition.inMilliseconds > 0) {
       await _player.seek(initialPosition);

@@ -26,15 +26,28 @@ class WaveVisualization extends StatefulWidget {
 class _WaveVisualizationState extends State<WaveVisualization> {
   List<double> _amplitudes = [];
   Timer? _updateTimer;
+  Duration? _lastPosition;
+  Duration? _lastDuration;
 
   @override
   void initState() {
     super.initState();
     _updateAmplitudes();
-    // Update amplitudes periodically to reflect real-time audio changes
+    _lastPosition = widget.position;
+    _lastDuration = widget.duration;
+    // Update amplitudes and check position periodically to reflect real-time audio changes
     _updateTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
       if (mounted) {
+        // Update amplitudes if chunks changed
         _updateAmplitudes();
+        // Force repaint if position or duration changed (for real-time waveform progress)
+        if (_lastPosition != widget.position || _lastDuration != widget.duration) {
+          _lastPosition = widget.position;
+          _lastDuration = widget.duration;
+          setState(() {
+            // Force CustomPaint to repaint with new position/duration
+          });
+        }
       }
     });
   }
@@ -42,10 +55,19 @@ class _WaveVisualizationState extends State<WaveVisualization> {
   @override
   void didUpdateWidget(WaveVisualization oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.pcmChunks.length != widget.pcmChunks.length ||
-        oldWidget.duration != widget.duration ||
-        oldWidget.position != widget.position) {
+    // Update amplitudes if chunks changed
+    if (oldWidget.pcmChunks.length != widget.pcmChunks.length) {
       _updateAmplitudes();
+    }
+    // Force repaint if position or duration changed (for waveform progress visualization)
+    if (oldWidget.duration != widget.duration ||
+        oldWidget.position != widget.position) {
+      // Trigger rebuild to update waveform progress visualization
+      if (mounted) {
+        setState(() {
+          // Force CustomPaint to repaint with new position/duration
+        });
+      }
     }
   }
 
